@@ -29,10 +29,6 @@ coverage.*
 
 # Environment
 .env
-.env.example
-
-# Swagger docs (will be generated inside container)
-internal/handler/docs/
 
 # OS files
 .DS_Store
