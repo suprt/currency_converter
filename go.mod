@@ -1,6 +1,6 @@
 module github.com/suprt/currency_converter
 
-go 1.25
+go 1.21
 
 require (
 	github.com/go-chi/chi/v5 v5.2.5
