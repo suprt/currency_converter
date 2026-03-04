@@ -1,7 +1,6 @@
 package config
 
 import (
-	"log"
 	"os"
 	"strconv"
 	"time"
@@ -45,8 +44,10 @@ type Config struct {
 }
 
 func Load() *Config {
+	// Try to load .env file, but don't fail if it doesn't exist
+	// Environment variables can be set directly in docker-compose or system
 	if err := godotenv.Load(); err != nil {
-		log.Fatal("Error loading .env file")
+		// Silently ignore - env vars may be set externally
 	}
 
 	return &Config{
