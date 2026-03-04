@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"time"
@@ -25,7 +24,7 @@ func (h *ConverterHandler) GetRates(w http.ResponseWriter, r *http.Request) {
 	from := r.URL.Query().Get("from")
 	to := r.URL.Query().Get("to")
 	if from == "" || to == "" {
-		http.Error(w, "Missing from and to", http.StatusBadRequest)
+		http.Error(w, "Missing from and to parameters", http.StatusBadRequest)
 		return
 	}
 
@@ -40,15 +39,7 @@ func (h *ConverterHandler) GetRates(w http.ResponseWriter, r *http.Request) {
 		"rate": rate,
 		"time": time.Now().Unix(),
 	}
-	w.Header().Set("Content-Type", "application/json")
-
-	err = json.NewEncoder(w).Encode(response)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-
+	JSON(w, http.StatusOK, response)
 }
 
 func (h *ConverterHandler) Convert(w http.ResponseWriter, r *http.Request) {
@@ -57,11 +48,11 @@ func (h *ConverterHandler) Convert(w http.ResponseWriter, r *http.Request) {
 	amountStr := r.URL.Query().Get("amount")
 	amount, err := strconv.ParseFloat(amountStr, 64)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, "Invalid amount", http.StatusBadRequest)
 		return
 	}
 	if from == "" || to == "" || amount <= 0 {
-		http.Error(w, "Missing from and to", http.StatusBadRequest)
+		http.Error(w, "Missing from, to or invalid amount", http.StatusBadRequest)
 		return
 	}
 
@@ -77,13 +68,5 @@ func (h *ConverterHandler) Convert(w http.ResponseWriter, r *http.Request) {
 		"result": result,
 		"time":   time.Now().Unix(),
 	}
-	w.Header().Set("Content-Type", "application/json")
-
-	err = json.NewEncoder(w).Encode(response)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.WriteHeader(http.StatusOK)
-
+	JSON(w, http.StatusOK, response)
 }

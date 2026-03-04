@@ -3,13 +3,13 @@ package bootstrap
 import (
 	"context"
 	"io"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/suprt/currency_converter/internal/client"
 	"github.com/suprt/currency_converter/internal/config"
 	"github.com/suprt/currency_converter/internal/handler"
+	"github.com/suprt/currency_converter/internal/logger"
 	"github.com/suprt/currency_converter/internal/middleware"
 	"github.com/suprt/currency_converter/internal/repository"
 	"github.com/suprt/currency_converter/internal/routes"
@@ -19,22 +19,24 @@ import (
 type App struct {
 	Config      *config.Config
 	Server      *http.Server
-	Updater     service.Updater
+	Updater     *service.Updater
 	RateLimiter routes.RateLimiter
 	Repo        service.Repo
 }
 
 func NewApp() (*App, error) {
 	cfg := config.Load()
+	logger.Init(cfg.LogLevel)
 	var repo service.Repo
 	if cfg.RedisUse {
 		redisRepo, err := repository.NewRedisStorage(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
 		if err != nil {
+			logger.Error("failed to create redis storage", "error", err)
 			return nil, err
 		}
 		repo = redisRepo
 	} else {
-		repo = repository.NewInMemoryRepository(cfg.CleanupInterval)
+		repo = repository.NewInMemoryRepository(cfg.InMemoryCleanupInterval)
 	}
 
 	apiClient := client.NewConverterClient(cfg.APIBaseURL, cfg.APIKey)
@@ -48,7 +50,7 @@ func NewApp() (*App, error) {
 		RPS:   cfg.RPS,
 		Burst: cfg.Burst,
 	})
-	rateLim.Start(cfg.CleanupInterval)
+	rateLim.Start(cfg.RateLimiterCleanup)
 
 	CacheHandler := handler.NewCacheHandler(svc)
 	ConverterHandler := handler.NewConverterHandler(svc)
@@ -71,10 +73,11 @@ func NewApp() (*App, error) {
 		WriteTimeout: cfg.ServerTimeout,
 		IdleTimeout:  cfg.ServerIdleTimeout,
 	}
+	logger.Info("server initialized", "addr", cfg.ServerAddr())
 	return &App{
 		Config:      cfg,
 		Server:      server,
-		Updater:     *updater,
+		Updater:     updater,
 		RateLimiter: rateLim,
 		Repo:        repo,
 	}, nil
@@ -86,14 +89,13 @@ func (app *App) Stop() {
 	defer cancel()
 	err := app.Server.Shutdown(ctx)
 	if err != nil {
-		log.Printf("Server shutdown error: %v", err)
+		logger.Error("server shutdown error", "error", err)
 	}
 	app.Updater.Stop()
 	app.RateLimiter.Stop()
 	if closer, ok := app.Repo.(io.Closer); ok {
-		err := closer.Close()
-		if err != nil {
-			return
+		if err := closer.Close(); err != nil {
+			logger.Error("repository close error", "error", err)
 		}
 	}
 }

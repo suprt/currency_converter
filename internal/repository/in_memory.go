@@ -48,22 +48,23 @@ func (r *InMemoryRepository) Set(ctx context.Context, key string, value float64,
 }
 
 func (r *InMemoryRepository) Get(ctx context.Context, key string) (float64, error) {
-
 	r.mu.RLock()
-	defer r.mu.RUnlock()
+	it, ok := r.items[key]
+	r.mu.RUnlock()
 
-	item, ok := r.items[key]
 	if !ok {
 		return 0, service.ErrNotFound
 	}
 
-	if item.expiresAt > 0 && item.expiresAt < time.Now().Unix() {
+	if it.expiresAt > 0 && it.expiresAt < time.Now().Unix() {
+
 		r.mu.Lock()
 		delete(r.items, key)
 		r.mu.Unlock()
 		return 0, service.ErrNotFound
 	}
-	return item.value, nil
+
+	return it.value, nil
 }
 
 func (r *InMemoryRepository) Delete(ctx context.Context, key string) error {
@@ -75,25 +76,32 @@ func (r *InMemoryRepository) Delete(ctx context.Context, key string) error {
 }
 
 func (r *InMemoryRepository) Exists(ctx context.Context, key string) (bool, error) {
-
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	_, ok := r.items[key]
-	if !ok {
-		return ok, service.ErrNotFound
-	}
 	return ok, nil
 }
 
 func (r *InMemoryRepository) TTL(ctx context.Context, key string) (time.Duration, error) {
-
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	item, ok := r.items[key]
+
+	it, ok := r.items[key]
 	if !ok {
 		return 0, service.ErrNotFound
 	}
-	return time.Duration(item.expiresAt - time.Now().Unix()), nil
+
+	if it.expiresAt == 0 {
+		return 0, nil
+	}
+
+	ttl := time.Duration(it.expiresAt-time.Now().Unix()) * time.Second
+
+	if ttl < 0 {
+		return 0, service.ErrNotFound
+	}
+
+	return ttl, nil
 }
 
 func (r *InMemoryRepository) Len(ctx context.Context) (int64, error) {

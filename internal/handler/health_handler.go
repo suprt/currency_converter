@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"time"
 )
@@ -25,17 +24,15 @@ func (h *HealthHandler) CheckHealth(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		status = "unhealthy"
 	}
-	response := map[string]interface{}{"status": status, "uptime": time.Since(h.startTime).String(), "timestamp": time.Now().Unix()}
+	response := map[string]interface{}{
+		"status":    status,
+		"uptime":    time.Since(h.startTime).String(),
+		"timestamp": time.Now().Unix(),
+	}
 	if err != nil {
 		response["error"] = err.Error()
-		w.WriteHeader(http.StatusServiceUnavailable)
-	}
-	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(response)
-	if err != nil {
-		w.WriteHeader(http.StatusInternalServerError)
+		JSON(w, http.StatusServiceUnavailable, response)
 		return
 	}
-	w.WriteHeader(http.StatusOK)
-
+	JSON(w, http.StatusOK, response)
 }

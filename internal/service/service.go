@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"time"
+
+	"github.com/suprt/currency_converter/internal/logger"
 )
 
 type Repo interface {
@@ -47,24 +48,24 @@ func NewConverterService(repo Repo, client ConverterClient) *Service {
 }
 
 func (s *Service) RefreshRates(ctx context.Context) error {
-	log.Println("Refreshing currencies rates...")
+	logger.Info("refreshing currencies rates")
 
 	resp, err := s.client.GetRates(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to fetch currencies rates: %w", err)
 	}
 	if err := s.repo.Clear(ctx); err != nil {
-		log.Println("failed to clear currencies rates: %w", err)
+		logger.Error("failed to clear currencies rates", "error", err)
 	}
 
 	for currency, rate := range resp {
 		key := fmt.Sprintf("%s:%s", "USD", currency)
 		if err := s.repo.Set(ctx, key, rate, time.Hour); err != nil {
-			log.Printf("failed to cache %s: %v", key, err)
+			logger.Error("failed to cache rate", "key", key, "error", err)
 		}
 	}
 	s.nextRefreshTime = time.Now().Add(time.Hour)
-	log.Println("Successfully refreshed currencies rates")
+	logger.Info("successfully refreshed currencies rates")
 	return nil
 }
 
@@ -82,7 +83,7 @@ func (s *Service) GetRates(ctx context.Context, from, to string) (float64, error
 		go func() {
 			err := s.repo.Set(ctx, directKey, rate, ttl)
 			if err != nil {
-				log.Printf("failed to cache %s: %v", directKey, err)
+				logger.Error("failed to cache rate", "key", directKey, "error", err)
 			}
 		}()
 	}
@@ -160,13 +161,13 @@ func (s *Service) ForceRefresh(ctx context.Context) error {
 		return fmt.Errorf("failed to fetch currencies rates: %w", err)
 	}
 	if err := s.repo.Clear(ctx); err != nil {
-		log.Println("failed to clear currencies rates: %w", err)
+		logger.Error("failed to clear currencies rates", "error", err)
 	}
 
 	for currency, rate := range resp {
 		key := fmt.Sprintf("%s:%s", "USD", currency)
 		if err := s.repo.Set(ctx, key, rate, time.Hour); err != nil {
-			log.Printf("failed to cache %s: %v", key, err)
+			logger.Error("failed to cache rate", "key", key, "error", err)
 		}
 	}
 	return nil

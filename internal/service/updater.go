@@ -2,8 +2,9 @@ package service
 
 import (
 	"context"
-	"log"
 	"time"
+
+	"github.com/suprt/currency_converter/internal/logger"
 )
 
 type Updater struct {
@@ -39,13 +40,13 @@ func (u *Updater) Start() {
 
 func (u *Updater) Stop() {
 	u.stopCh <- struct{}{}
-	log.Println("Updater stopped")
+	logger.Info("updater stopped")
 }
 
 func (u *Updater) refresh() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := u.service.RefreshRates(ctx); err != nil {
-		log.Printf("failed to refresh rates: %s", err.Error())
+		logger.Error("failed to refresh rates", "error", err)
 	}
 }

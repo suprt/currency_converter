@@ -27,15 +27,21 @@ type Config struct {
 	RedisUse      bool
 
 	//Rate limiter
-	RPS             int
-	Burst           int
-	CleanupInterval time.Duration
+	RPS                    int
+	Burst                  int
+	RateLimiterCleanup     time.Duration
 
 	//Updater
 	UpdateInterval time.Duration
 
+	// In-memory cache
+	InMemoryCleanupInterval time.Duration
+
 	// Admin
 	AdminAPIKey string
+
+	// Logger
+	LogLevel string
 }
 
 func Load() *Config {
@@ -57,13 +63,17 @@ func Load() *Config {
 		RedisDB:       getEnvInt("REDIS_DB", 0),
 		RedisUse:      getEnvBool("REDIS_USE", false),
 
-		RPS:             getEnvInt("RPS", 10),
-		Burst:           getEnvInt("BURST", 20),
-		CleanupInterval: getEnvDuration("CLEANUP_INTERVAL", 5*time.Minute),
+		RPS:                getEnvInt("RPS", 10),
+		Burst:              getEnvInt("BURST", 20),
+		RateLimiterCleanup: getEnvDuration("RATE_LIMITER_CLEANUP", 1*time.Minute),
 
 		UpdateInterval: getEnvDuration("UPDATE_INTERVAL", 1*time.Hour),
 
+		InMemoryCleanupInterval: getEnvDuration("INMEMORY_CLEANUP_INTERVAL", 5*time.Minute),
+
 		AdminAPIKey: getEnv("ADMIN_API_KEY", ""),
+
+		LogLevel: getEnv("LOG_LEVEL", "info"),
 	}
 }
 

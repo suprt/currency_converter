@@ -104,7 +104,8 @@ func (t *TokenBucket) Cleanup() {
 
 	for key, b := range t.tokens {
 		b.mu.Lock()
-		if time.Since(b.lastUpdate) > time.Hour {
+		// Удаляем бакеты, которые не использовались больше 10 минут
+		if time.Since(b.lastUpdate) > 10*time.Minute {
 			delete(t.tokens, key)
 		}
 		b.mu.Unlock()
@@ -112,9 +113,12 @@ func (t *TokenBucket) Cleanup() {
 }
 
 func (t *TokenBucket) Start(interval time.Duration) {
-
+	// Если интервал не задан, используем 1 минуту по умолчанию
+	if interval <= 0 {
+		interval = 1 * time.Minute
+	}
+	
 	go func() {
-
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 

@@ -7,6 +7,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/suprt/currency_converter/internal/logger"
 )
 
 type ConverterClient struct {
@@ -50,9 +52,8 @@ func (c *ConverterClient) GetRates(ctx context.Context) (map[string]float64, err
 		return nil, fmt.Errorf("get rates request failed: %w", err)
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-
+		if err := Body.Close(); err != nil {
+			logger.Error("failed to close response body", "error", err)
 		}
 	}(resp.Body)
 
@@ -94,9 +95,8 @@ func (c *ConverterClient) GetCurrencies(ctx context.Context) ([]byte, error) {
 		return nil, fmt.Errorf("get currencies request failed: %w", err)
 	}
 	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-
+		if err := Body.Close(); err != nil {
+			logger.Error("failed to close response body", "error", err)
 		}
 	}(resp.Body)
 

@@ -85,17 +85,25 @@ func (r *RedisRepository) TTL(ctx context.Context, key string) (time.Duration, e
 }
 
 func (r *RedisRepository) Len(ctx context.Context) (int64, error) {
-	val, err := r.client.Keys(ctx, "*").Result()
-	if err != nil {
-		return 0, fmt.Errorf("redis keys failed: %w", err)
+	var count int64
+	iter := r.client.Scan(ctx, 0, "*", 0).Iterator()
+	for iter.Next(ctx) {
+		count++
 	}
-	return int64(len(val)), nil
+	if err := iter.Err(); err != nil {
+		return 0, fmt.Errorf("redis scan failed: %w", err)
+	}
+	return count, nil
 }
 
 func (r *RedisRepository) Clear(ctx context.Context) error {
-	keys, err := r.client.Keys(ctx, "*").Result()
-	if err != nil {
-		return fmt.Errorf("redis keys failed: %w", err)
+	var keys []string
+	iter := r.client.Scan(ctx, 0, "*", 0).Iterator()
+	for iter.Next(ctx) {
+		keys = append(keys, iter.Val())
+	}
+	if err := iter.Err(); err != nil {
+		return fmt.Errorf("redis scan failed: %w", err)
 	}
 	if len(keys) > 0 {
 		return r.client.Del(ctx, keys...).Err()
