@@ -26,9 +26,9 @@ type Config struct {
 	RedisUse      bool
 
 	//Rate limiter
-	RPS                    int
-	Burst                  int
-	RateLimiterCleanup     time.Duration
+	RPS                int
+	Burst              int
+	RateLimiterCleanup time.Duration
 
 	//Updater
 	UpdateInterval time.Duration
@@ -44,10 +44,9 @@ type Config struct {
 }
 
 func Load() *Config {
-	// Try to load .env file, but don't fail if it doesn't exist
-	// Environment variables can be set directly in docker-compose or system
+
 	if err := godotenv.Load(); err != nil {
-		// Silently ignore - env vars may be set externally
+
 	}
 
 	return &Config{

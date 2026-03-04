@@ -62,20 +62,20 @@ services:
     networks:
       - currency_converter_net
 
-  # Swagger UI (optional, for API documentation)
-  # swagger:
-  #   image: swaggerapi/swagger-ui:latest
-  #   container_name: currency_converter_swagger
-  #   ports:
-  #     - "8081:8080"
-  #   environment:
-  #     - SWAGGER_JSON=/swagger/swagger.json
-  #   volumes:
-  #     - ./internal/handler/docs:/swagger
-  #   depends_on:
-  #     - api
-  #   networks:
-  #     - currency_converter_net
+
+  swagger:
+    image: swaggerapi/swagger-ui:latest
+    container_name: currency_converter_swagger
+    ports:
+      - "8081:8080"
+    environment:
+       - SWAGGER_JSON=/swagger/swagger.json
+    volumes:
+       - ./internal/handler/docs:/swagger
+    depends_on:
+      - api
+    networks:
+      - currency_converter_net
 
 volumes:
   redis_data:

@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/rs/cors"
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
@@ -81,5 +82,7 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		httpSwagger.DomID("swagger-ui"),
 	))
 
-	return r
+	// Wrap with CORS
+	handler := cors.Default().Handler(r)
+	return handler
 }
