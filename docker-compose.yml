@@ -1,0 +1,86 @@
+version: '3.8'
+
+services:
+  # Currency Converter API
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: currency_converter
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8080
+      - SERVER_TIMEOUT=30s
+      - SERVER_IDLE_TIMEOUT=120s
+      
+      # API Configuration
+      - API_KEY=${API_KEY:-}
+      - API_URL=${API_URL:-https://currencyapi.net/api/v2/}
+      - ADMIN_API_KEY=${ADMIN_API_KEY:-admin-secret-key-123}
+      
+      # Redis Configuration
+      - REDIS_USE=${REDIS_USE:-true}
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_DB=0
+      
+      # Rate Limiter
+      - RPS=${RPS:-10}
+      - BURST=${BURST:-20}
+      - RATE_LIMITER_CLEANUP=${RATE_LIMITER_CLEANUP:-1m}
+      
+      # Cache
+      - INMEMORY_CLEANUP_INTERVAL=${INMEMORY_CLEANUP_INTERVAL:-5m}
+      - UPDATE_INTERVAL=${UPDATE_INTERVAL:-1h}
+      
+      # Logger
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - currency_converter_net
+
+  # Redis for caching
+  redis:
+    image: redis:7-alpine
+    container_name: currency_converter_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - currency_converter_net
+
+  # Swagger UI (optional, for API documentation)
+  # swagger:
+  #   image: swaggerapi/swagger-ui:latest
+  #   container_name: currency_converter_swagger
+  #   ports:
+  #     - "8081:8080"
+  #   environment:
+  #     - SWAGGER_JSON=/swagger/swagger.json
+  #   volumes:
+  #     - ./internal/handler/docs:/swagger
+  #   depends_on:
+  #     - api
+  #   networks:
+  #     - currency_converter_net
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  currency_converter_net:
+    driver: bridge

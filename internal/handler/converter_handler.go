@@ -20,6 +20,18 @@ func NewConverterHandler(service ConverterService) *ConverterHandler {
 	return &ConverterHandler{service: service}
 }
 
+// GetRates godoc
+// @Summary Get currency exchange rate
+// @Description Get the exchange rate between two currencies
+// @Tags conversion
+// @Accept json
+// @Produce json
+// @Param from query string true "Source currency code (e.g., USD)"
+// @Param to query string true "Target currency code (e.g., EUR)"
+// @Success 200 {object} map[string]interface{} "Exchange rate response"
+// @Failure 400 {string} string "Missing required parameters"
+// @Failure 500 {string} string "Internal server error"
+// @Router /rates [get]
 func (h *ConverterHandler) GetRates(w http.ResponseWriter, r *http.Request) {
 	from := r.URL.Query().Get("from")
 	to := r.URL.Query().Get("to")
@@ -42,6 +54,19 @@ func (h *ConverterHandler) GetRates(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, response)
 }
 
+// Convert godoc
+// @Summary Convert currency amount
+// @Description Convert an amount from one currency to another
+// @Tags conversion
+// @Accept json
+// @Produce json
+// @Param from query string true "Source currency code (e.g., USD)"
+// @Param to query string true "Target currency code (e.g., EUR)"
+// @Param amount query number true "Amount to convert (must be positive)"
+// @Success 200 {object} map[string]interface{} "Conversion result with original amount and converted result"
+// @Failure 400 {string} string "Invalid parameters"
+// @Failure 500 {string} string "Internal server error"
+// @Router /convert [get]
 func (h *ConverterHandler) Convert(w http.ResponseWriter, r *http.Request) {
 	from := r.URL.Query().Get("from")
 	to := r.URL.Query().Get("to")

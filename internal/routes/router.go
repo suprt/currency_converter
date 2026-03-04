@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	httpSwagger "github.com/swaggo/http-swagger"
 )
 
 type CacheOperator interface {
@@ -71,5 +72,14 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		r.Get("/check", cfg.CacheOperator.CheckRate)
 		r.Get("/ttl", cfg.CacheOperator.TTLKey)
 	})
+
+	// Swagger UI
+	r.Get("/swagger/*", httpSwagger.Handler(
+		httpSwagger.URL("/swagger/doc.json"),
+		httpSwagger.DeepLinking(true),
+		httpSwagger.DocExpansion("none"),
+		httpSwagger.DomID("swagger-ui"),
+	))
+
 	return r
 }

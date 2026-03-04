@@ -1,0 +1,39 @@
+# Development files
+.git
+.gitignore
+.qwen
+*.md
+!go.mod
+!go.sum
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Test files
+*_test.go
+scripts/
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Build artifacts
+currency_converter
+currency_converter.exe
+*.out
+*.coverprofile
+coverage.*
+
+# Environment
+.env
+.env.example
+
+# Swagger docs (will be generated inside container)
+internal/handler/docs/
+
+# OS files
+.DS_Store
+Thumbs.db

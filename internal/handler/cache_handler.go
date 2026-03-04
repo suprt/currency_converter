@@ -30,6 +30,19 @@ func NewCacheHandler(service CacheService) *CacheHandler {
 	}
 }
 
+// GetKey godoc
+// @Summary Get cached exchange rate
+// @Description Get a cached exchange rate value by currency pair
+// @Tags cache
+// @Security ApiKeyAuth
+// @Accept json
+// @Produce json
+// @Param from query string true "Source currency code"
+// @Param to query string true "Target currency code"
+// @Success 200 {object} map[string]float64 "Cached rate value"
+// @Failure 400 {string} string "Missing required parameters"
+// @Failure 500 {string} string "Internal server error"
+// @Router /admin/cache/get [get]
 func (h *CacheHandler) GetKey(w http.ResponseWriter, r *http.Request) {
 	from := r.URL.Query().Get("from")
 	to := r.URL.Query().Get("to")
@@ -46,6 +59,21 @@ func (h *CacheHandler) GetKey(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, map[string]float64{key: value})
 }
 
+// SetKey godoc
+// @Summary Set cached exchange rate
+// @Description Manually set a cached exchange rate value with custom TTL
+// @Tags cache
+// @Security ApiKeyAuth
+// @Accept json
+// @Produce json
+// @Param from query string true "Source currency code"
+// @Param to query string true "Target currency code"
+// @Param value query number true "Exchange rate value"
+// @Param ttl query integer true "Time to live in seconds"
+// @Success 200 {string} string "OK"
+// @Failure 400 {string} string "Invalid parameters"
+// @Failure 500 {string} string "Internal server error"
+// @Router /admin/cache/set [get]
 func (h *CacheHandler) SetKey(w http.ResponseWriter, r *http.Request) {
 	from := r.URL.Query().Get("from")
 	to := r.URL.Query().Get("to")
@@ -73,6 +101,19 @@ func (h *CacheHandler) SetKey(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// DeleteRate godoc
+// @Summary Delete cached exchange rate
+// @Description Delete a cached exchange rate by currency pair
+// @Tags cache
+// @Security ApiKeyAuth
+// @Accept json
+// @Produce json
+// @Param from query string true "Source currency code"
+// @Param to query string true "Target currency code"
+// @Success 200 {string} string "OK"
+// @Failure 400 {string} string "Missing required parameters"
+// @Failure 500 {string} string "Internal server error"
+// @Router /admin/cache/delete [get]
 func (h *CacheHandler) DeleteRate(w http.ResponseWriter, r *http.Request) {
 	from := r.URL.Query().Get("from")
 	to := r.URL.Query().Get("to")
@@ -87,6 +128,16 @@ func (h *CacheHandler) DeleteRate(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// CacheSize godoc
+// @Summary Get cache size
+// @Description Get the current number of cached exchange rates and last update time
+// @Tags cache
+// @Security ApiKeyAuth
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{} "Cache size and last update timestamp"
+// @Failure 500 {string} string "Internal server error"
+// @Router /admin/cache/size [get]
 func (h *CacheHandler) CacheSize(w http.ResponseWriter, r *http.Request) {
 	size, err := h.service.CacheSize(r.Context())
 	if err != nil {
@@ -99,6 +150,19 @@ func (h *CacheHandler) CacheSize(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// CheckRate godoc
+// @Summary Check if rate exists in cache
+// @Description Check if a currency pair exchange rate exists in the cache
+// @Tags cache
+// @Security ApiKeyAuth
+// @Accept json
+// @Produce json
+// @Param from query string true "Source currency code"
+// @Param to query string true "Target currency code"
+// @Success 200 {object} map[string]bool "Exists status"
+// @Failure 400 {string} string "Missing required parameters"
+// @Failure 500 {string} string "Internal server error"
+// @Router /admin/cache/check [get]
 func (h *CacheHandler) CheckRate(w http.ResponseWriter, r *http.Request) {
 	from := r.URL.Query().Get("from")
 	to := r.URL.Query().Get("to")
@@ -114,6 +178,16 @@ func (h *CacheHandler) CheckRate(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, map[string]bool{"exists": exists})
 }
 
+// ClearAndRefresh godoc
+// @Summary Clear and refresh cache
+// @Description Clear all cached rates and force refresh from the API
+// @Tags cache
+// @Security ApiKeyAuth
+// @Accept json
+// @Produce json
+// @Success 200 {string} string "OK"
+// @Failure 500 {string} string "Cache cleared but refresh failed"
+// @Router /admin/cache/clear [post]
 func (h *CacheHandler) ClearAndRefresh(w http.ResponseWriter, r *http.Request) {
 	if err := h.service.Clear(r.Context()); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -127,6 +201,19 @@ func (h *CacheHandler) ClearAndRefresh(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// TTLKey godoc
+// @Summary Get TTL for cached rate
+// @Description Get the remaining time-to-live for a cached exchange rate
+// @Tags cache
+// @Security ApiKeyAuth
+// @Accept json
+// @Produce json
+// @Param from query string true "Source currency code"
+// @Param to query string true "Target currency code"
+// @Success 200 {object} map[string]interface{} "TTL information"
+// @Failure 400 {string} string "Missing required parameters"
+// @Failure 500 {string} string "Internal server error"
+// @Router /admin/cache/ttl [get]
 func (h *CacheHandler) TTLKey(w http.ResponseWriter, r *http.Request) {
 	from := r.URL.Query().Get("from")
 	to := r.URL.Query().Get("to")
