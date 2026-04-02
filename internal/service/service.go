@@ -81,6 +81,16 @@ func (s *Service) GetRates(ctx context.Context, from, to string) (float64, error
 	ttl := time.Until(s.nextRefreshTime)
 	if ttl > 0 {
 		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					logger.Error("panic in cache rate goroutine", "key", directKey, "panic", r)
+				}
+			}()
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
 			err := s.repo.Set(ctx, directKey, rate, ttl)
 			if err != nil {
 				logger.Error("failed to cache rate", "key", directKey, "error", err)
