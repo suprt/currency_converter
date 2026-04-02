@@ -113,5 +113,13 @@ func (c *ConverterClient) GetCurrencies(ctx context.Context) ([]byte, error) {
 		return nil, fmt.Errorf("read response body failed: %w", err)
 	}
 
+	var result CurrenciesResponse
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("parse response body failed: %w", err)
+	}
+	if !result.Valid {
+		return nil, fmt.Errorf("API return invalid response")
+	}
+
 	return body, nil
 }
