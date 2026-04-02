@@ -7,8 +7,6 @@ import (
 	"io"
 	"net/http"
 	"time"
-
-	"github.com/suprt/currency_converter/internal/logger"
 )
 
 type ConverterClient struct {
@@ -39,7 +37,7 @@ func NewConverterClient(baseURL string, apiKey string) *ConverterClient {
 	}
 }
 
-func (c *ConverterClient) GetRates(ctx context.Context) (map[string]float64, error) {
+func (c *ConverterClient) GetRates(ctx context.Context) (rates map[string]float64, err error) {
 	url := fmt.Sprintf("%srates?key=%s&base=USD&output=json", c.baseURL, c.apiKey)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -51,11 +49,11 @@ func (c *ConverterClient) GetRates(ctx context.Context) (map[string]float64, err
 	if err != nil {
 		return nil, fmt.Errorf("get rates request failed: %w", err)
 	}
-	defer func(Body io.ReadCloser) {
-		if err := Body.Close(); err != nil {
-			logger.Error("failed to close response body", "error", err)
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			err = fmt.Errorf("failed to close response body: %w", closeErr)
 		}
-	}(resp.Body)
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
@@ -82,7 +80,7 @@ func (c *ConverterClient) GetRates(ctx context.Context) (map[string]float64, err
 	return result.Rates, nil
 }
 
-func (c *ConverterClient) GetCurrencies(ctx context.Context) ([]byte, error) {
+func (c *ConverterClient) GetCurrencies(ctx context.Context) (body []byte, err error) {
 	url := fmt.Sprintf("%scurrencies?key=%s&output=json", c.baseURL, c.apiKey)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -94,11 +92,11 @@ func (c *ConverterClient) GetCurrencies(ctx context.Context) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("get currencies request failed: %w", err)
 	}
-	defer func(Body io.ReadCloser) {
-		if err := Body.Close(); err != nil {
-			logger.Error("failed to close response body", "error", err)
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			err = fmt.Errorf("failed to close response body: %w", closeErr)
 		}
-	}(resp.Body)
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		body, err := io.ReadAll(resp.Body)
@@ -108,7 +106,7 @@ func (c *ConverterClient) GetCurrencies(ctx context.Context) ([]byte, error) {
 		return nil, fmt.Errorf("get currencies request failed, status code: %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	body, err := io.ReadAll(resp.Body)
+	body, err = io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("read response body failed: %w", err)
 	}
