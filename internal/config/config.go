@@ -1,6 +1,7 @@
 package config
 
 import (
+	"log"
 	"os"
 	"strconv"
 	"time"
@@ -49,7 +50,7 @@ type Config struct {
 func Load() *Config {
 
 	if err := godotenv.Load(); err != nil {
-
+		log.Printf("Warning: .env file not loaded: %v\n", err)
 	}
 
 	return &Config{
