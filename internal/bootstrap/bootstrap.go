@@ -38,8 +38,8 @@ func NewApp() (*App, error) {
 	} else {
 		repo = repository.NewInMemoryRepository(cfg.InMemoryCleanupInterval)
 	}
-
-	apiClient := client.NewConverterClient(cfg.APIBaseURL, cfg.APIKey, cfg.ConverterTimeout)
+	circuitBreaker := client.NewCircuitBreaker(cfg.CircuitBreakerThreshold, cfg.CircuitBreakerTimeout)
+	apiClient := client.NewConverterClient(cfg.APIBaseURL, cfg.APIKey, cfg.ConverterTimeout, circuitBreaker)
 
 	svc := service.NewConverterService(repo, apiClient)
 

@@ -15,9 +15,10 @@ import (
 )
 
 type ConverterClient struct {
-	baseURL    string
-	apiKey     string
-	httpClient *http.Client
+	baseURL        string
+	apiKey         string
+	httpClient     *http.Client
+	circuitBreaker *CircuitBreaker
 }
 
 type APIResponse struct {
@@ -32,13 +33,17 @@ type CurrenciesResponse struct {
 	Currencies map[string]string `json:"currencies"`
 }
 
-func NewConverterClient(baseURL string, apiKey string, timeout time.Duration) *ConverterClient {
+func NewConverterClient(baseURL string, apiKey string, timeout time.Duration, circuitBreaker *CircuitBreaker) *ConverterClient {
+	if circuitBreaker == nil {
+		circuitBreaker = NewCircuitBreaker(5, time.Second*30)
+	}
 	return &ConverterClient{
 		baseURL: baseURL,
 		apiKey:  apiKey,
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
+		circuitBreaker: circuitBreaker,
 	}
 }
 
@@ -107,12 +112,16 @@ func (c *ConverterClient) GetRates(ctx context.Context) (map[string]float64, err
 	)
 
 	var lastErr error
+	var result map[string]float64
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		result, err := c.doGetRates(ctx)
-		if err == nil {
-			return result, nil
-		}
+		err := c.circuitBreaker.Execute(func() error {
+			rates, err := c.doGetRates(ctx)
+			if err == nil {
+				result = rates
+			}
+			return err
+		})
 
 		lastErr = err
 		if logger.Log != nil {
@@ -131,7 +140,7 @@ func (c *ConverterClient) GetRates(ctx context.Context) (map[string]float64, err
 		}
 	}
 
-	return nil, fmt.Errorf("all %d attempts failed: %w", maxRetries, lastErr)
+	return result, fmt.Errorf("all %d attempts failed: %w", maxRetries, lastErr)
 }
 
 func (c *ConverterClient) doGetCurrencies(ctx context.Context) (body []byte, err error) {
@@ -184,13 +193,16 @@ func (c *ConverterClient) GetCurrencies(ctx context.Context) ([]byte, error) {
 	)
 
 	var lastErr error
+	var result []byte
 
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		body, err := c.doGetCurrencies(ctx)
-		if err == nil {
-			return body, nil
-		}
-
+		err := c.circuitBreaker.Execute(func() error {
+			body, err := c.doGetCurrencies(ctx)
+			if err == nil {
+				result = body
+			}
+			return err
+		})
 		lastErr = err
 		if logger.Log != nil {
 			logger.Warn("do get currencies request", "attempt", attempt, "error", err)
@@ -208,5 +220,5 @@ func (c *ConverterClient) GetCurrencies(ctx context.Context) ([]byte, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("all %d attempts failed: %w", maxRetries, lastErr)
+	return result, fmt.Errorf("all %d attempts failed: %w", maxRetries, lastErr)
 }

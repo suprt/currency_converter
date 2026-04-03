@@ -45,6 +45,10 @@ type Config struct {
 
 	// Converter client
 	ConverterTimeout time.Duration
+
+	// Circuit breaker
+	CircuitBreakerThreshold int
+	CircuitBreakerTimeout   time.Duration
 }
 
 func Load() *Config {
@@ -59,7 +63,7 @@ func Load() *Config {
 
 		ServerHost:        getEnv("SERVER_HOST", "localhost"),
 		ServerPort:        getEnv("SERVER_PORT", ":8080"),
-		ServerTimeout:     getEnvDuration("SERVER_TIMEOUT", 15*time.Second),
+		ServerTimeout:     getEnvDuration("SERVER_TIMEOUT", 45*time.Second),
 		ServerIdleTimeout: getEnvDuration("SERVER_IDLE_TIMEOUT", 120*time.Second),
 
 		RedisAddr:     getEnv("REDIS_ADDR", "localhost:6379"),
@@ -77,8 +81,12 @@ func Load() *Config {
 
 		AdminAPIKey: getEnv("ADMIN_API_KEY", ""),
 
-		LogLevel:         getEnv("LOG_LEVEL", "info"),
+		LogLevel: getEnv("LOG_LEVEL", "info"),
+
 		ConverterTimeout: getEnvDuration("CONVERTER_TIMEOUT", 10*time.Second),
+
+		CircuitBreakerThreshold: getEnvInt("CIRCUIT_BREAKER_THRESHOLD", 5),
+		CircuitBreakerTimeout:   getEnvDuration("CIRCUIT_BREAKER_TIMEOUT", 30*time.Second),
 	}
 }
 

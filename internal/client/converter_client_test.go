@@ -22,7 +22,7 @@ func TestConverterClient_GetRates_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewConverterClient(server.URL+"/", "test-api-key", 15*time.Second)
+	client := NewConverterClient(server.URL+"/", "test-api-key", 15*time.Second, nil)
 	rates, err := client.GetRates(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
@@ -46,7 +46,7 @@ func TestConverterClient_GetRates_InvalidJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`{"not valid json":json}`))
 	}))
 	defer server.Close()
-	client := NewConverterClient(server.URL+"/", "test-api-key", 15*time.Second)
+	client := NewConverterClient(server.URL+"/", "test-api-key", 15*time.Second, nil)
 	_, err := client.GetRates(context.Background())
 	if err == nil {
 		t.Fatalf("expected error, got nil")
@@ -68,7 +68,7 @@ func TestConverterClient_GetRates_NonOKStatus(t *testing.T) {
 
 	}))
 	defer server.Close()
-	client := NewConverterClient(server.URL+"/", "test-api-key", 15*time.Second)
+	client := NewConverterClient(server.URL+"/", "test-api-key", 15*time.Second, nil)
 	_, err := client.GetRates(context.Background())
 	if err == nil {
 		t.Fatalf("expected error, got nil")
@@ -81,7 +81,7 @@ func TestConverterClient_GetRates_NonOKStatus(t *testing.T) {
 }
 
 func TestConverterClient_GetRates_NetworkError(t *testing.T) {
-	client := NewConverterClient("https://InvalidHostName/", "test-api-key", 15*time.Second)
+	client := NewConverterClient("https://InvalidHostName/", "test-api-key", 15*time.Second, nil)
 	_, err := client.GetRates(context.Background())
 	if err == nil {
 		t.Fatalf("expected error, got nil")
@@ -103,7 +103,7 @@ func TestConverterClient_GetRates_ValidFalseResponse(t *testing.T) {
 		_, _ = w.Write([]byte(`{"valid": false, "updated": 1234567890, "base":"USD", "rates":{"EUR":0.85, "GBP":0.73}}`))
 	}))
 	defer server.Close()
-	client := NewConverterClient(server.URL+"/", "test-api-key", 15*time.Second)
+	client := NewConverterClient(server.URL+"/", "test-api-key", 15*time.Second, nil)
 	_, err := client.GetRates(context.Background())
 	if err == nil {
 		t.Fatalf("expected error, got nil")
@@ -123,7 +123,7 @@ func TestConverterClient_GetRates_Timeout(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewConverterClient(server.URL+"/", "test-api-key", time.Second)
+	client := NewConverterClient(server.URL+"/", "test-api-key", time.Second, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 	_, err := client.GetRates(ctx)
@@ -152,7 +152,7 @@ func TestConverterClient_GetRates_RetryOn500(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewConverterClient(server.URL+"/", "test-api-key", 15*time.Second)
+	client := NewConverterClient(server.URL+"/", "test-api-key", 15*time.Second, nil)
 
 	rates, err := client.GetRates(context.Background())
 
@@ -184,7 +184,7 @@ func TestConverterClient_GetRates_RetryOnTimeout(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewConverterClient(server.URL+"/", "test-api-key", 1*time.Second)
+	client := NewConverterClient(server.URL+"/", "test-api-key", 1*time.Second, nil)
 
 	rates, err := client.GetRates(context.Background())
 
@@ -216,7 +216,7 @@ func TestConverterClient_GetRates_400(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewConverterClient(server.URL+"/", "test-api-key", 1*time.Second)
+	client := NewConverterClient(server.URL+"/", "test-api-key", 1*time.Second, nil)
 
 	_, err := client.GetRates(context.Background())
 	if attempt > 1 {
@@ -242,7 +242,7 @@ func TestConverterClient_GetCurrencies_Success(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewConverterClient(server.URL+"/", "test-api-key", 15*time.Second)
+	client := NewConverterClient(server.URL+"/", "test-api-key", 15*time.Second, nil)
 	currencies, err := client.GetCurrencies(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
@@ -253,7 +253,7 @@ func TestConverterClient_GetCurrencies_Success(t *testing.T) {
 }
 
 func TestConverterClient_GetCurrencies_NetworkError(t *testing.T) {
-	client := NewConverterClient("https://InvalidHostName/", "test-api-key", 15*time.Second)
+	client := NewConverterClient("https://InvalidHostName/", "test-api-key", 15*time.Second, nil)
 	_, err := client.GetCurrencies(context.Background())
 	if err == nil {
 		t.Fatalf("expected error, got nil")
@@ -275,7 +275,7 @@ func TestConverterClient_GetCurrencies_NonOKStatus(t *testing.T) {
 
 	}))
 	defer server.Close()
-	client := NewConverterClient(server.URL+"/", "test-api-key", 15*time.Second)
+	client := NewConverterClient(server.URL+"/", "test-api-key", 15*time.Second, nil)
 	_, err := client.GetCurrencies(context.Background())
 	if err == nil {
 		t.Fatalf("expected error, got nil")
@@ -297,7 +297,7 @@ func TestConverterClient_GetCurrencies_InvalidJSON(t *testing.T) {
 		_, _ = w.Write([]byte(`not json`))
 	}))
 	defer server.Close()
-	client := NewConverterClient(server.URL+"/", "test-api-key", 15*time.Second)
+	client := NewConverterClient(server.URL+"/", "test-api-key", 15*time.Second, nil)
 	_, err := client.GetCurrencies(context.Background())
 	if err == nil {
 		t.Fatalf("expected error, got nil")
@@ -324,7 +324,7 @@ func TestConverterClient_GetCurrencies_RetryOn500(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewConverterClient(server.URL+"/", "test-api-key", 15*time.Second)
+	client := NewConverterClient(server.URL+"/", "test-api-key", 15*time.Second, nil)
 
 	currencies, err := client.GetCurrencies(context.Background())
 
@@ -353,7 +353,7 @@ func TestConverterClient_GetCurrencies_RetryOnTimeout(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewConverterClient(server.URL+"/", "test-api-key", 1*time.Second)
+	client := NewConverterClient(server.URL+"/", "test-api-key", 1*time.Second, nil)
 
 	currencies, err := client.GetCurrencies(context.Background())
 
@@ -382,7 +382,7 @@ func TestConverterClient_GetCurrencies_400(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewConverterClient(server.URL+"/", "test-api-key", 1*time.Second)
+	client := NewConverterClient(server.URL+"/", "test-api-key", 1*time.Second, nil)
 
 	_, err := client.GetCurrencies(context.Background())
 	if attempt > 1 {
