@@ -123,6 +123,10 @@ func (c *ConverterClient) GetRates(ctx context.Context) (map[string]float64, err
 			return err
 		})
 
+		if err == nil {
+			return result, nil
+		}
+
 		lastErr = err
 		if logger.Log != nil {
 			logger.Log.Warn("do get rates request", "attempt", attempt, "error", err)
@@ -140,7 +144,7 @@ func (c *ConverterClient) GetRates(ctx context.Context) (map[string]float64, err
 		}
 	}
 
-	return result, fmt.Errorf("all %d attempts failed: %w", maxRetries, lastErr)
+	return nil, fmt.Errorf("all %d attempts failed: %w", maxRetries, lastErr)
 }
 
 func (c *ConverterClient) doGetCurrencies(ctx context.Context) (body []byte, err error) {
@@ -203,6 +207,10 @@ func (c *ConverterClient) GetCurrencies(ctx context.Context) ([]byte, error) {
 			}
 			return err
 		})
+
+		if err == nil {
+			return result, nil
+		}
 		lastErr = err
 		if logger.Log != nil {
 			logger.Warn("do get currencies request", "attempt", attempt, "error", err)
@@ -220,5 +228,5 @@ func (c *ConverterClient) GetCurrencies(ctx context.Context) ([]byte, error) {
 		}
 	}
 
-	return result, fmt.Errorf("all %d attempts failed: %w", maxRetries, lastErr)
+	return nil, fmt.Errorf("all %d attempts failed: %w", maxRetries, lastErr)
 }
