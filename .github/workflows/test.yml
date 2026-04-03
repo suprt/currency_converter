@@ -24,7 +24,8 @@ jobs:
         run: go mod download
 
       - name: Generate Swagger docs
-        run: go install github.com/swaggo/swag/cmd/swag@latest swag init -g cmd/api/main.go -o internal/handler/docs
+        run: go install github.com/swaggo/swag/cmd/swag@latest
+            swag init -g cmd/api/main.go -o internal/handler/docs
       - name: Build
         run: go build -v ./cmd/api
 
