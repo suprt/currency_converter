@@ -52,7 +52,7 @@ func TestCurrencyHandler_List(t *testing.T) {
 			t.Errorf("expected Content-Type application/json, got %s", w.Header().Get("Content-Type"))
 		}
 
-		if string(w.Body.Bytes()) != `{"EUR": "Euro", "GBP": "British Pound"}` {
+		if string(w.Body.String()) != `{"EUR": "Euro", "GBP": "British Pound"}` {
 			t.Errorf("unexpected response body: %s", w.Body.String())
 		}
 	})
