@@ -3,10 +3,15 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"strings"
 	"time"
+
+	"github.com/suprt/currency_converter/internal/logger"
 )
 
 type ConverterClient struct {
@@ -27,17 +32,17 @@ type CurrenciesResponse struct {
 	Currencies map[string]string `json:"currencies"`
 }
 
-func NewConverterClient(baseURL string, apiKey string) *ConverterClient {
+func NewConverterClient(baseURL string, apiKey string, timeout time.Duration) *ConverterClient {
 	return &ConverterClient{
 		baseURL: baseURL,
 		apiKey:  apiKey,
 		httpClient: &http.Client{
-			Timeout: time.Second * 15,
+			Timeout: timeout,
 		},
 	}
 }
 
-func (c *ConverterClient) GetRates(ctx context.Context) (rates map[string]float64, err error) {
+func (c *ConverterClient) doGetRates(ctx context.Context) (rates map[string]float64, err error) {
 	url := fmt.Sprintf("%srates?key=%s&base=USD&output=json", c.baseURL, c.apiKey)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -80,7 +85,56 @@ func (c *ConverterClient) GetRates(ctx context.Context) (rates map[string]float6
 	return result.Rates, nil
 }
 
-func (c *ConverterClient) GetCurrencies(ctx context.Context) (body []byte, err error) {
+func (c *ConverterClient) isRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	var netError net.Error
+	if errors.As(err, &netError) && netError.Timeout() {
+		return true
+	}
+	if strings.Contains(err.Error(), "status code: 5") {
+		return true
+	}
+	return false
+}
+
+func (c *ConverterClient) GetRates(ctx context.Context) (map[string]float64, error) {
+
+	const (
+		maxRetries = 3
+		initDelay  = 1 * time.Second
+	)
+
+	var lastErr error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		result, err := c.doGetRates(ctx)
+		if err == nil {
+			return result, nil
+		}
+
+		lastErr = err
+		if logger.Log != nil {
+			logger.Log.Warn("do get rates request", "attempt", attempt, "error", err)
+		}
+		if !c.isRetryableError(err) {
+			return nil, err
+		}
+
+		delay := initDelay * time.Duration(1<<uint(attempt))
+
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
+	return nil, fmt.Errorf("all %d attempts failed: %w", maxRetries, lastErr)
+}
+
+func (c *ConverterClient) doGetCurrencies(ctx context.Context) (body []byte, err error) {
 	url := fmt.Sprintf("%scurrencies?key=%s&output=json", c.baseURL, c.apiKey)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -120,4 +174,39 @@ func (c *ConverterClient) GetCurrencies(ctx context.Context) (body []byte, err e
 	}
 
 	return body, nil
+}
+
+func (c *ConverterClient) GetCurrencies(ctx context.Context) ([]byte, error) {
+
+	const (
+		maxRetries = 3
+		initDelay  = 1 * time.Second
+	)
+
+	var lastErr error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		body, err := c.doGetCurrencies(ctx)
+		if err == nil {
+			return body, nil
+		}
+
+		lastErr = err
+		if logger.Log != nil {
+			logger.Warn("do get currencies request", "attempt", attempt, "error", err)
+		}
+		if !c.isRetryableError(err) {
+			return nil, err
+		}
+
+		delay := initDelay * time.Duration(1<<uint(attempt))
+
+		select {
+		case <-time.After(delay):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+
+	return nil, fmt.Errorf("all %d attempts failed: %w", maxRetries, lastErr)
 }

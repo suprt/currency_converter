@@ -4,7 +4,6 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"time"
 )
 
 var Log *slog.Logger
@@ -31,7 +30,6 @@ func parseLevel(level string) slog.Level {
 	}
 }
 
-// Helper функции для удобства
 func Info(msg string, args ...any) {
 	Log.Info(msg, args...)
 }
@@ -46,15 +44,4 @@ func Debug(msg string, args ...any) {
 
 func Warn(msg string, args ...any) {
 	Log.Warn(msg, args...)
-}
-
-// Middleware для логирования HTTP запросов
-func HTTPMiddleware(next interface{}) interface{} {
-	// Вернётся функция-обёртка для chi middleware
-	return next
-}
-
-// Логгер для времени запуска
-func Startup(msg string) {
-	Log.Info(msg, "timestamp", time.Now().Format(time.RFC3339))
 }

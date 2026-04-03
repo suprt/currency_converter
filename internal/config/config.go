@@ -41,6 +41,9 @@ type Config struct {
 
 	// Logger
 	LogLevel string
+
+	// Converter client
+	ConverterTimeout time.Duration
 }
 
 func Load() *Config {
@@ -73,7 +76,8 @@ func Load() *Config {
 
 		AdminAPIKey: getEnv("ADMIN_API_KEY", ""),
 
-		LogLevel: getEnv("LOG_LEVEL", "info"),
+		LogLevel:         getEnv("LOG_LEVEL", "info"),
+		ConverterTimeout: getEnvDuration("CONVERTER_TIMEOUT", 10*time.Second),
 	}
 }
 

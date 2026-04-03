@@ -31,7 +31,7 @@ func NewApp() (*App, error) {
 	if cfg.RedisUse {
 		redisRepo, err := repository.NewRedisStorage(cfg.RedisAddr, cfg.RedisPassword, cfg.RedisDB)
 		if err != nil {
-			logger.Error("failed to create redis storage", "error", err)
+			logger.Log.Error("failed to create redis storage", "error", err)
 			return nil, err
 		}
 		repo = redisRepo
@@ -39,7 +39,7 @@ func NewApp() (*App, error) {
 		repo = repository.NewInMemoryRepository(cfg.InMemoryCleanupInterval)
 	}
 
-	apiClient := client.NewConverterClient(cfg.APIBaseURL, cfg.APIKey)
+	apiClient := client.NewConverterClient(cfg.APIBaseURL, cfg.APIKey, cfg.ConverterTimeout)
 
 	svc := service.NewConverterService(repo, apiClient)
 
@@ -73,7 +73,7 @@ func NewApp() (*App, error) {
 		WriteTimeout: cfg.ServerTimeout,
 		IdleTimeout:  cfg.ServerIdleTimeout,
 	}
-	logger.Info("server initialized", "addr", cfg.ServerAddr())
+	logger.Log.Info("server initialized", "addr", cfg.ServerAddr())
 	return &App{
 		Config:      cfg,
 		Server:      server,
@@ -89,13 +89,13 @@ func (app *App) Stop() {
 	defer cancel()
 	err := app.Server.Shutdown(ctx)
 	if err != nil {
-		logger.Error("server shutdown error", "error", err)
+		logger.Log.Error("server shutdown error", "error", err)
 	}
 	app.Updater.Stop()
 	app.RateLimiter.Stop()
 	if closer, ok := app.Repo.(io.Closer); ok {
 		if err := closer.Close(); err != nil {
-			logger.Error("repository close error", "error", err)
+			logger.Log.Error("repository close error", "error", err)
 		}
 	}
 }
