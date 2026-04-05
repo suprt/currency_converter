@@ -224,3 +224,71 @@ func TestConverterHandler_Convert(t *testing.T) {
 		}
 	})
 }
+
+func TestConverterHandler_GetRates_InvalidCurrency(t *testing.T) {
+	tests := []struct {
+		name       string
+		from       string
+		to         string
+		wantStatus int
+	}{
+		{"empty from", "", "USD", http.StatusBadRequest},
+		{"short from", "EU", "USD", http.StatusBadRequest},
+		{"long from", "EURO", "USD", http.StatusBadRequest},
+		{"digits in from", "EU1", "USD", http.StatusBadRequest},
+		{"lowercase", "eur", "usd", http.StatusOK},
+		{"spec symbol in from", "EU^", "USD", http.StatusBadRequest},
+		{"whitespace in around", "%20EUR", "USD", http.StatusOK},
+		{"whitespace in param", "EU%20R", "USD", http.StatusBadRequest},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewMockConverterService()
+			handler := NewConverterHandler(svc)
+			req := httptest.NewRequest(http.MethodGet, "/rates?from="+tt.from+"&to="+tt.to, nil)
+			w := httptest.NewRecorder()
+			handler.GetRates(w, req)
+			if w.Code != tt.wantStatus {
+				t.Errorf("expected status %d, got %d", tt.wantStatus, w.Code)
+			}
+		})
+	}
+
+}
+
+func TestConverterHandler_Convert_InvalidCurrency(t *testing.T) {
+	tests := []struct {
+		name       string
+		from       string
+		to         string
+		amount     string
+		wantStatus int
+	}{
+		{"empty from", "", "USD", "3", http.StatusBadRequest},
+		{"short from", "EU", "USD", "3", http.StatusBadRequest},
+		{"long from", "EURO", "USD", "3", http.StatusBadRequest},
+		{"digits in from", "EU1", "USD", "3", http.StatusBadRequest},
+		{"lowercase", "eur", "usd", "3", http.StatusOK},
+		{"negative amount", "EUR", "USD", "-100", http.StatusBadRequest},
+		{"zero amount", "EUR", "USD", "0", http.StatusBadRequest},
+		{"letters in amount", "EUR", "USD", "abc", http.StatusBadRequest},
+		{"spec symbol in from", "EU^", "USD", "3", http.StatusBadRequest},
+		{"whitespace in around", "%20EUR", "USD", "3", http.StatusOK},
+		{"whitespace in param", "EU%20R", "USD", "3", http.StatusBadRequest},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewMockConverterService()
+			svc.SetRate("EUR", "USD", 1.1)
+			handler := NewConverterHandler(svc)
+			req := httptest.NewRequest(http.MethodGet, "/convert?from="+tt.from+"&to="+tt.to+"&amount="+tt.amount, nil)
+			w := httptest.NewRecorder()
+			handler.Convert(w, req)
+			if w.Code != tt.wantStatus {
+				t.Errorf("expected status %d, got %d", tt.wantStatus, w.Code)
+			}
+		})
+	}
+}

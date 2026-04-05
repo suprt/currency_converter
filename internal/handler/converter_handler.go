@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -33,10 +34,14 @@ func NewConverterHandler(service ConverterService) *ConverterHandler {
 // @Failure 500 {string} string "Internal server error"
 // @Router /rates [get]
 func (h *ConverterHandler) GetRates(w http.ResponseWriter, r *http.Request) {
-	from := r.URL.Query().Get("from")
-	to := r.URL.Query().Get("to")
-	if from == "" || to == "" {
-		http.Error(w, "Missing from and to parameters", http.StatusBadRequest)
+	from := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("from")))
+	to := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("to")))
+	if err := validateCurrencyCode(from); err != nil {
+		http.Error(w, "Invalid 'from' parameter: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := validateCurrencyCode(to); err != nil {
+		http.Error(w, "Invalid 'to' parameter: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -68,16 +73,26 @@ func (h *ConverterHandler) GetRates(w http.ResponseWriter, r *http.Request) {
 // @Failure 500 {string} string "Internal server error"
 // @Router /convert [get]
 func (h *ConverterHandler) Convert(w http.ResponseWriter, r *http.Request) {
-	from := r.URL.Query().Get("from")
-	to := r.URL.Query().Get("to")
-	amountStr := r.URL.Query().Get("amount")
-	amount, err := strconv.ParseFloat(amountStr, 64)
-	if err != nil {
-		http.Error(w, "Invalid amount", http.StatusBadRequest)
+	from := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("from")))
+	to := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("to")))
+
+	if err := validateCurrencyCode(from); err != nil {
+		http.Error(w, "Invalid 'from' parameter: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if from == "" || to == "" || amount <= 0 {
-		http.Error(w, "Missing from, to or invalid amount", http.StatusBadRequest)
+	if err := validateCurrencyCode(to); err != nil {
+		http.Error(w, "Invalid 'to' parameter: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	amountStr := strings.TrimSpace(r.URL.Query().Get("amount"))
+	amount, err := strconv.ParseFloat(amountStr, 64)
+	if err != nil {
+		http.Error(w, "Invalid amount: must be a number", http.StatusBadRequest)
+		return
+	}
+	if amount <= 0 {
+		http.Error(w, "Invalid amount: must be a positive number", http.StatusBadRequest)
 		return
 	}
 
