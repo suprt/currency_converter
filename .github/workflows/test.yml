@@ -29,7 +29,9 @@ jobs:
           swag init -g cmd/api/main.go -o internal/handler/docs
 
       - name: Build
-        run: go build -v ./cmd/api
+        run: |
+          go mod tidy
+          go build -v ./cmd/api
 
       - name: Vet
         run: go vet ./...
