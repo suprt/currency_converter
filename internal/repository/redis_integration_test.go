@@ -4,16 +4,19 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
+	"github.com/suprt/currency_converter/internal/service"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 func setupRedisContainer(t *testing.T) (*RedisRepository, func()) {
 	t.Helper()
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
 
 	req := testcontainers.ContainerRequest{
 		Image:        "redis:7-alpine",
@@ -81,8 +84,7 @@ func TestRedisIntegration_TTL(t *testing.T) {
 	}
 	time.Sleep(2 * time.Second)
 	val, err := repo.Get(ctx, "USD:EUR")
-	if err == nil {
-
+	if !errors.Is(err, service.ErrNotFound) {
 		t.Fatalf("Expected error, got nil")
 	}
 	if val != 0 {
@@ -103,7 +105,7 @@ func TestRedisIntegration_Delete(t *testing.T) {
 		t.Fatalf("Delete failed: %v", err)
 	}
 	val, err := repo.Get(ctx, "USD:EUR")
-	if err == nil {
+	if !errors.Is(err, service.ErrNotFound) {
 		t.Fatalf("Expected error, got nil")
 	}
 	if val != 0 {
@@ -143,7 +145,7 @@ func TestRedisIntegration_Clear(t *testing.T) {
 		t.Fatalf("Clear failed: %v", err)
 	}
 	val, err = repo.Get(ctx, "USD:EUR")
-	if err == nil {
+	if !errors.Is(err, service.ErrNotFound) {
 		t.Fatalf("Expected error, got nil")
 	}
 	if val != 0 {
