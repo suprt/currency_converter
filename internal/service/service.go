@@ -159,12 +159,12 @@ func (s *Service) CacheSize(ctx context.Context) (int64, error) {
 	return s.repo.Len(ctx)
 }
 
-// Принудительная очистка кэша
+// Clear Принудительная очистка кэша
 func (s *Service) Clear(ctx context.Context) error {
 	return s.repo.Clear(ctx)
 }
 
-// Принудительное обновление кэша
+// ForceRefresh Принудительное обновление кэша
 func (s *Service) ForceRefresh(ctx context.Context) error {
 	resp, err := s.client.GetRates(ctx)
 	if err != nil {
