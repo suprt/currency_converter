@@ -3,6 +3,8 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,16 +13,16 @@ import (
 
 // MockCacheService - mock for CacheService interface
 type MockCacheService struct {
-	data        map[string]float64
-	size        int64
-	lastUpdate  time.Time
-	getErr      error
-	setErr      error
-	deleteErr   error
-	clearErr    error
+	data            map[string]float64
+	size            int64
+	lastUpdate      time.Time
+	getErr          error
+	setErr          error
+	deleteErr       error
+	clearErr        error
 	forceRefreshErr error
-	ttlErr      error
-	existsErr   error
+	ttlErr          error
+	existsErr       error
 }
 
 func NewMockCacheService() *MockCacheService {
@@ -85,162 +87,134 @@ func (m *MockCacheService) SetData(from, to string, value float64) {
 }
 
 func TestCacheHandler_GetKey(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
-		svc := NewMockCacheService()
-		svc.SetData("EUR", "GBP", 0.86)
-		handler := NewCacheHandler(svc)
 
-		req := httptest.NewRequest(http.MethodGet, "/admin/cache/get?from=EUR&to=GBP", nil)
-		w := httptest.NewRecorder()
+	tests := []struct {
+		name           string
+		from           string
+		to             string
+		value          float64
+		getErr         error
+		expectedStatus int
+		expectedValue  float64
+	}{
+		{
+			name:           "success",
+			from:           "EUR",
+			to:             "GBP",
+			value:          0.86,
+			expectedStatus: http.StatusOK,
+			expectedValue:  0.86,
+		},
+		{
+			name:           "missing parameters",
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "service error",
+			from:           "EUR",
+			to:             "GBP",
+			getErr:         errors.New("cache miss"),
+			expectedStatus: http.StatusInternalServerError,
+		},
+	}
 
-		handler.GetKey(w, req)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewMockCacheService()
+			svc.SetData(tt.from, tt.to, tt.value)
+			svc.getErr = tt.getErr
+			handler := NewCacheHandler(svc)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", w.Code)
-		}
+			req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/admin/cache/get?from=%s&to=%s", tt.from, tt.to), nil)
+			w := httptest.NewRecorder()
 
-		var resp map[string]float64
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to parse response: %v", err)
-		}
+			handler.GetKey(w, req)
+			if w.Code != tt.expectedStatus {
+				t.Fatalf("expected status %d, got %d", tt.expectedStatus, w.Code)
+			}
+			if tt.expectedStatus == http.StatusOK {
+				var resp map[string]float64
+				if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+					t.Fatalf("failed to parse response: %v", err)
+				}
+				key := tt.from + ":" + tt.to
+				if val, ok := resp[key]; !ok || val != tt.expectedValue {
+					t.Fatalf("expected value %f, got %f", tt.expectedValue, val)
+				}
+			}
+		})
+	}
 
-		key := "EUR:GBP"
-		if val, ok := resp[key]; !ok || val != 0.86 {
-			t.Errorf("expected %s=0.86, got %v", key, resp)
-		}
-	})
-
-	t.Run("missing parameters", func(t *testing.T) {
-		svc := NewMockCacheService()
-		handler := NewCacheHandler(svc)
-
-		req := httptest.NewRequest(http.MethodGet, "/admin/cache/get", nil)
-		w := httptest.NewRecorder()
-
-		handler.GetKey(w, req)
-
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("expected status 400, got %d", w.Code)
-		}
-	})
-
-	t.Run("service error", func(t *testing.T) {
-		svc := NewMockCacheService()
-		svc.getErr = assertionError("cache miss")
-		handler := NewCacheHandler(svc)
-
-		req := httptest.NewRequest(http.MethodGet, "/admin/cache/get?from=EUR&to=GBP", nil)
-		w := httptest.NewRecorder()
-
-		handler.GetKey(w, req)
-
-		if w.Code != http.StatusInternalServerError {
-			t.Errorf("expected status 500, got %d", w.Code)
-		}
-	})
 }
 
 func TestCacheHandler_SetKey(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
-		svc := NewMockCacheService()
-		handler := NewCacheHandler(svc)
+	tests := []struct {
+		name           string
+		from           string
+		to             string
+		value          string
+		ttl            string
+		setErr         error
+		expectedStatus int
+	}{
+		{"success", "EUR", "GBP", "0.86", "3600", nil, http.StatusOK},
+		{"missing parameters", "", "", "", "", nil, http.StatusBadRequest},
+		{"invalid ttl", "EUR", "GBP", "0.86", "-100", nil, http.StatusBadRequest},
+		{"invalid value", "EUR", "GBP", "abc", "3600", nil, http.StatusBadRequest},
+		{"service error", "EUR", "GBP", "0.86", "3600", errors.New("set failed"), http.StatusInternalServerError},
+	}
 
-		req := httptest.NewRequest(http.MethodGet, "/admin/cache/set?from=EUR&to=GBP&value=0.86&ttl=3600", nil)
-		w := httptest.NewRecorder()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewMockCacheService()
+			svc.setErr = tt.setErr
+			handler := NewCacheHandler(svc)
 
-		handler.SetKey(w, req)
+			req := httptest.NewRequest(http.MethodGet,
+				fmt.Sprintf("/admin/cache/set?from=%s&to=%s&value=%s&ttl=%s", tt.from, tt.to, tt.value, tt.ttl),
+				nil)
+			w := httptest.NewRecorder()
 
-		if w.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", w.Code)
-		}
-	})
+			handler.SetKey(w, req)
+			if w.Code != tt.expectedStatus {
+				t.Fatalf("expected status %d, got %d", tt.expectedStatus, w.Code)
+			}
 
-	t.Run("missing parameters", func(t *testing.T) {
-		svc := NewMockCacheService()
-		handler := NewCacheHandler(svc)
+		})
+	}
 
-		req := httptest.NewRequest(http.MethodGet, "/admin/cache/set", nil)
-		w := httptest.NewRecorder()
-
-		handler.SetKey(w, req)
-
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("expected status 400, got %d", w.Code)
-		}
-	})
-
-	t.Run("invalid ttl", func(t *testing.T) {
-		svc := NewMockCacheService()
-		handler := NewCacheHandler(svc)
-
-		req := httptest.NewRequest(http.MethodGet, "/admin/cache/set?from=EUR&to=GBP&value=0.86&ttl=-100", nil)
-		w := httptest.NewRecorder()
-
-		handler.SetKey(w, req)
-
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("expected status 400, got %d", w.Code)
-		}
-	})
-
-	t.Run("invalid value", func(t *testing.T) {
-		svc := NewMockCacheService()
-		handler := NewCacheHandler(svc)
-
-		req := httptest.NewRequest(http.MethodGet, "/admin/cache/set?from=EUR&to=GBP&value=invalid&ttl=3600", nil)
-		w := httptest.NewRecorder()
-
-		handler.SetKey(w, req)
-
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("expected status 400, got %d", w.Code)
-		}
-	})
 }
 
 func TestCacheHandler_DeleteRate(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
-		svc := NewMockCacheService()
-		handler := NewCacheHandler(svc)
+	tests := []struct {
+		name           string
+		from           string
+		to             string
+		deleteErr      error
+		expectedStatus int
+	}{
+		{"success", "EUR", "GBP", nil, http.StatusOK},
+		{"missing parameters", "", "", nil, http.StatusBadRequest},
+		{"service error", "EUR", "GBP", errors.New("delete failed"), http.StatusInternalServerError},
+	}
 
-		req := httptest.NewRequest(http.MethodGet, "/admin/cache/delete?from=EUR&to=GBP", nil)
-		w := httptest.NewRecorder()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewMockCacheService()
+			svc.deleteErr = tt.deleteErr
+			handler := NewCacheHandler(svc)
 
-		handler.DeleteRate(w, req)
+			req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/admin/cache/delete?from=%s&to=%s", tt.from, tt.to), nil)
+			w := httptest.NewRecorder()
 
-		if w.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", w.Code)
-		}
-	})
+			handler.DeleteRate(w, req)
 
-	t.Run("missing parameters", func(t *testing.T) {
-		svc := NewMockCacheService()
-		handler := NewCacheHandler(svc)
+			if w.Code != tt.expectedStatus {
+				t.Fatalf("expected status %d, got %d", tt.expectedStatus, w.Code)
+			}
+		})
+	}
 
-		req := httptest.NewRequest(http.MethodGet, "/admin/cache/delete", nil)
-		w := httptest.NewRecorder()
-
-		handler.DeleteRate(w, req)
-
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("expected status 400, got %d", w.Code)
-		}
-	})
-
-	t.Run("service error", func(t *testing.T) {
-		svc := NewMockCacheService()
-		svc.deleteErr = assertionError("delete failed")
-		handler := NewCacheHandler(svc)
-
-		req := httptest.NewRequest(http.MethodGet, "/admin/cache/delete?from=EUR&to=GBP", nil)
-		w := httptest.NewRecorder()
-
-		handler.DeleteRate(w, req)
-
-		if w.Code != http.StatusInternalServerError {
-			t.Errorf("expected status 500, got %d", w.Code)
-		}
-	})
 }
 
 func TestCacheHandler_CacheSize(t *testing.T) {
@@ -255,7 +229,7 @@ func TestCacheHandler_CacheSize(t *testing.T) {
 		handler.CacheSize(w, req)
 
 		if w.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", w.Code)
+			t.Fatalf("expected status 200, got %d", w.Code)
 		}
 
 		var resp map[string]interface{}
@@ -264,170 +238,116 @@ func TestCacheHandler_CacheSize(t *testing.T) {
 		}
 
 		if size, ok := resp["size"].(float64); !ok || size != 42 {
-			t.Errorf("expected size 42, got %v", resp["size"])
+			t.Fatalf("expected size 42, got %v", resp["size"])
 		}
 	})
 }
 
 func TestCacheHandler_CheckRate(t *testing.T) {
-	t.Run("exists", func(t *testing.T) {
-		svc := NewMockCacheService()
-		svc.SetData("EUR", "GBP", 0.86)
-		handler := NewCacheHandler(svc)
+	tests := []struct {
+		name           string
+		from           string
+		to             string
+		value          float64
+		expectedStatus int
+		expectedExist  bool
+	}{
+		{"exists", "EUR", "GBP", 0.86, http.StatusOK, true},
+		{"not exists", "EUR", "GBP", 0, http.StatusOK, false},
+		{"missing parameters", "", "", 0, http.StatusBadRequest, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewMockCacheService()
+			if tt.expectedExist {
+				svc.SetData(tt.from, tt.to, tt.value)
+			}
+			handler := NewCacheHandler(svc)
 
-		req := httptest.NewRequest(http.MethodGet, "/admin/cache/check?from=EUR&to=GBP", nil)
-		w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/admin/cache/check?from=%s&to=%s", tt.from, tt.to), nil)
+			w := httptest.NewRecorder()
 
-		handler.CheckRate(w, req)
-
-		if w.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", w.Code)
-		}
-
-		var resp map[string]bool
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to parse response: %v", err)
-		}
-
-		if !resp["exists"] {
-			t.Error("expected key to exist")
-		}
-	})
-
-	t.Run("not exists", func(t *testing.T) {
-		svc := NewMockCacheService()
-		handler := NewCacheHandler(svc)
-
-		req := httptest.NewRequest(http.MethodGet, "/admin/cache/check?from=EUR&to=GBP", nil)
-		w := httptest.NewRecorder()
-
-		handler.CheckRate(w, req)
-
-		if w.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", w.Code)
-		}
-
-		var resp map[string]bool
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to parse response: %v", err)
-		}
-
-		if resp["exists"] {
-			t.Error("expected key to not exist")
-		}
-	})
-
-	t.Run("missing parameters", func(t *testing.T) {
-		svc := NewMockCacheService()
-		handler := NewCacheHandler(svc)
-
-		req := httptest.NewRequest(http.MethodGet, "/admin/cache/check", nil)
-		w := httptest.NewRecorder()
-
-		handler.CheckRate(w, req)
-
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("expected status 400, got %d", w.Code)
-		}
-	})
+			handler.CheckRate(w, req)
+			if w.Code != tt.expectedStatus {
+				t.Fatalf("expected status %d, got %d", tt.expectedStatus, w.Code)
+			}
+			if tt.expectedStatus == http.StatusOK {
+				var resp map[string]bool
+				if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+					t.Fatalf("failed to parse response: %v", err)
+				}
+				if resp["exists"] != tt.expectedExist {
+					t.Fatalf("expected value %t, got %t", tt.expectedExist, resp["exists"])
+				}
+			}
+		})
+	}
 }
 
 func TestCacheHandler_ClearAndRefresh(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
-		svc := NewMockCacheService()
-		handler := NewCacheHandler(svc)
+	tests := []struct {
+		name           string
+		refreshErr     error
+		expectedStatus int
+	}{
+		{"success", nil, http.StatusOK},
+		{"clear error", errors.New("clear failed"), http.StatusInternalServerError},
+		{"refresh error", errors.New("refresh failed"), http.StatusInternalServerError},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewMockCacheService()
+			svc.forceRefreshErr = tt.refreshErr
+			handler := NewCacheHandler(svc)
 
-		req := httptest.NewRequest(http.MethodPost, "/admin/cache/clear", nil)
-		w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, "/admin/cache/clear", nil)
+			w := httptest.NewRecorder()
 
-		handler.ClearAndRefresh(w, req)
+			handler.ClearAndRefresh(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", w.Code)
-		}
-	})
+			if w.Code != tt.expectedStatus {
+				t.Fatalf("expected status %d, got %d", tt.expectedStatus, w.Code)
+			}
+		})
+	}
 
-	t.Run("clear error", func(t *testing.T) {
-		svc := NewMockCacheService()
-		svc.clearErr = assertionError("clear failed")
-		handler := NewCacheHandler(svc)
-
-		req := httptest.NewRequest(http.MethodPost, "/admin/cache/clear", nil)
-		w := httptest.NewRecorder()
-
-		handler.ClearAndRefresh(w, req)
-
-		if w.Code != http.StatusInternalServerError {
-			t.Errorf("expected status 500, got %d", w.Code)
-		}
-	})
-
-	t.Run("refresh error", func(t *testing.T) {
-		svc := NewMockCacheService()
-		svc.forceRefreshErr = assertionError("refresh failed")
-		handler := NewCacheHandler(svc)
-
-		req := httptest.NewRequest(http.MethodPost, "/admin/cache/clear", nil)
-		w := httptest.NewRecorder()
-
-		handler.ClearAndRefresh(w, req)
-
-		if w.Code != http.StatusInternalServerError {
-			t.Errorf("expected status 500, got %d", w.Code)
-		}
-	})
 }
 
 func TestCacheHandler_TTLKey(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
-		svc := NewMockCacheService()
-		handler := NewCacheHandler(svc)
+	tests := []struct {
+		name           string
+		from           string
+		to             string
+		ttlErr         error
+		expectedStatus int
+	}{
+		{"success", "EUR", "GBP", nil, http.StatusOK},
+		{"missing parameters", "", "", nil, http.StatusBadRequest},
+		{"service error", "EUR", "GBP", errors.New("ttl error"), http.StatusInternalServerError},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewMockCacheService()
+			svc.ttlErr = tt.ttlErr
+			handler := NewCacheHandler(svc)
 
-		req := httptest.NewRequest(http.MethodGet, "/admin/cache/ttl?from=EUR&to=GBP", nil)
-		w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/admin/cache/ttl?from=%s&to=%s", tt.from, tt.to), nil)
+			w := httptest.NewRecorder()
 
-		handler.TTLKey(w, req)
+			handler.TTLKey(w, req)
+			if w.Code != tt.expectedStatus {
+				t.Fatalf("expected status %d, got %d", tt.expectedStatus, w.Code)
+			}
+			if tt.expectedStatus == http.StatusOK {
+				var resp map[string]interface{}
+				if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+					t.Fatalf("failed to parse response: %v", err)
+				}
+				if resp["from"] != tt.from || resp["to"] != tt.to {
+					t.Fatalf("unexpected from/to in response")
+				}
+			}
+		})
+	}
 
-		if w.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", w.Code)
-		}
-
-		var resp map[string]interface{}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to parse response: %v", err)
-		}
-
-		if resp["from"] != "EUR" || resp["to"] != "GBP" {
-			t.Error("unexpected from/to in response")
-		}
-	})
-
-	t.Run("missing parameters", func(t *testing.T) {
-		svc := NewMockCacheService()
-		handler := NewCacheHandler(svc)
-
-		req := httptest.NewRequest(http.MethodGet, "/admin/cache/ttl", nil)
-		w := httptest.NewRecorder()
-
-		handler.TTLKey(w, req)
-
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("expected status 400, got %d", w.Code)
-		}
-	})
-
-	t.Run("service error", func(t *testing.T) {
-		svc := NewMockCacheService()
-		svc.ttlErr = assertionError("ttl error")
-		handler := NewCacheHandler(svc)
-
-		req := httptest.NewRequest(http.MethodGet, "/admin/cache/ttl?from=EUR&to=GBP", nil)
-		w := httptest.NewRecorder()
-
-		handler.TTLKey(w, req)
-
-		if w.Code != http.StatusInternalServerError {
-			t.Errorf("expected status 500, got %d", w.Code)
-		}
-	})
 }
