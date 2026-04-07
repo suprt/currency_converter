@@ -7,167 +7,237 @@ import (
 )
 
 func TestGetEnv(t *testing.T) {
-	t.Run("existing env", func(t *testing.T) {
-		os.Setenv("TEST_VAR", "test_value")
-		defer os.Unsetenv("TEST_VAR")
 
-		val := getEnv("TEST_VAR", "default")
-		if val != "test_value" {
-			t.Errorf("expected 'test_value', got '%s'", val)
-		}
-	})
+	tests := []struct {
+		name       string
+		key        string
+		value      string
+		expect     string
+		defaultVal string
+		keyExists  bool
+	}{
+		{
+			name:       "existing key",
+			key:        "TEST_VAR",
+			value:      "test_value",
+			expect:     "test_value",
+			defaultVal: "default_value",
+			keyExists:  true,
+		},
+		{
+			name:       "non-existing key",
+			key:        "NON_EXISTING_VAR",
+			expect:     "default_value",
+			defaultVal: "default_value",
+			keyExists:  false,
+		},
+		{
+			name:       "empty value",
+			key:        "EMPTY_VAR",
+			value:      "",
+			expect:     "default_value",
+			defaultVal: "default_value",
+			keyExists:  true,
+		},
+	}
 
-	t.Run("non-existing env", func(t *testing.T) {
-		os.Unsetenv("NON_EXISTENT_VAR")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_ = os.Unsetenv(tt.key)
+			if tt.keyExists {
+				_ = os.Setenv(tt.key, tt.defaultVal)
+			}
+			t.Cleanup(func() { _ = os.Unsetenv(tt.key) })
 
-		val := getEnv("NON_EXISTENT_VAR", "default_value")
-		if val != "default_value" {
-			t.Errorf("expected 'default_value', got '%s'", val)
-		}
-	})
+			val := getEnv(tt.key, tt.expect)
+			if val != tt.expect {
+				t.Fatalf("got %s, want %s", val, tt.expect)
+			}
+		})
+	}
 
-	t.Run("empty env", func(t *testing.T) {
-		os.Setenv("EMPTY_VAR", "")
-		defer os.Unsetenv("EMPTY_VAR")
-
-		val := getEnv("EMPTY_VAR", "default_for_empty")
-		if val != "default_for_empty" {
-			t.Errorf("expected 'default_for_empty', got '%s'", val)
-		}
-	})
 }
 
 func TestGetEnvInt(t *testing.T) {
-	t.Run("valid int", func(t *testing.T) {
-		os.Setenv("TEST_INT", "42")
-		defer os.Unsetenv("TEST_INT")
+	tests := []struct {
+		name       string
+		key        string
+		value      string
+		expect     int
+		defaultVal int
+		keyExists  bool
+	}{
+		{
+			name:       "valid int",
+			key:        "TEST_INT",
+			value:      "42",
+			expect:     42,
+			defaultVal: 0,
+			keyExists:  true,
+		},
+		{
+			name:       "invalid int",
+			key:        "INVALID_INT",
+			value:      "not_a_number",
+			expect:     100,
+			defaultVal: 100,
+			keyExists:  true,
+		},
+		{
+			name:       "non-existing int",
+			key:        "NON_EXISTING_INT",
+			expect:     50,
+			defaultVal: 50,
+			keyExists:  false,
+		},
+		{
+			name:       "empty env",
+			key:        "EMPTY_INT",
+			value:      "",
+			expect:     75,
+			defaultVal: 75,
+			keyExists:  true,
+		},
+	}
 
-		val := getEnvInt("TEST_INT", 0)
-		if val != 42 {
-			t.Errorf("expected 42, got %d", val)
-		}
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_ = os.Unsetenv(tt.key)
+			if tt.keyExists {
+				_ = os.Setenv(tt.key, tt.value)
+			}
+			t.Cleanup(func() { _ = os.Unsetenv(tt.key) })
+			val := getEnvInt(tt.key, tt.defaultVal)
+			if val != tt.expect {
+				t.Fatalf("got %d, want %d", val, tt.expect)
+			}
+		})
+	}
 
-	t.Run("invalid int", func(t *testing.T) {
-		os.Setenv("TEST_INT", "not_a_number")
-		defer os.Unsetenv("TEST_INT")
-
-		val := getEnvInt("TEST_INT", 100)
-		if val != 100 {
-			t.Errorf("expected 100 (default), got %d", val)
-		}
-	})
-
-	t.Run("non-existing env", func(t *testing.T) {
-		os.Unsetenv("NON_EXISTENT_INT")
-
-		val := getEnvInt("NON_EXISTENT_INT", 50)
-		if val != 50 {
-			t.Errorf("expected 50 (default), got %d", val)
-		}
-	})
-
-	t.Run("empty env", func(t *testing.T) {
-		os.Setenv("EMPTY_INT", "")
-		defer os.Unsetenv("EMPTY_INT")
-
-		val := getEnvInt("EMPTY_INT", 75)
-		if val != 75 {
-			t.Errorf("expected 75 (default), got %d", val)
-		}
-	})
 }
 
 func TestGetEnvDuration(t *testing.T) {
-	t.Run("valid duration", func(t *testing.T) {
-		os.Setenv("TEST_DURATION", "5m")
-		defer os.Unsetenv("TEST_DURATION")
+	tests := []struct {
+		name       string
+		key        string
+		value      string
+		expect     time.Duration
+		defaultVal time.Duration
+		keyExists  bool
+	}{
+		{
+			name:       "valid duration",
+			key:        "VALID_DURATION",
+			value:      "1m",
+			expect:     1 * time.Minute,
+			defaultVal: 0 * time.Minute,
+			keyExists:  true,
+		},
+		{
+			name:       "invalid duration",
+			key:        "INVALID_DURATION",
+			value:      "not_a_duration",
+			expect:     10 * time.Second,
+			defaultVal: 10 * time.Second,
+			keyExists:  true,
+		},
+		{
+			name:       "non-existing env",
+			key:        "NON_EXISTING_DURATION",
+			expect:     15 * time.Second,
+			defaultVal: 15 * time.Second,
+			keyExists:  false,
+		},
+		{
+			name:       "empty env",
+			key:        "EMPTY_DURATION",
+			value:      "",
+			expect:     30 * time.Second,
+			defaultVal: 30 * time.Second,
+			keyExists:  true,
+		},
+	}
 
-		val := getEnvDuration("TEST_DURATION", 0)
-		if val != 5*time.Minute {
-			t.Errorf("expected 5m, got %v", val)
-		}
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_ = os.Unsetenv(tt.key)
+			if tt.keyExists {
+				_ = os.Setenv(tt.key, tt.value)
+			}
+			t.Cleanup(func() { _ = os.Unsetenv(tt.key) })
 
-	t.Run("invalid duration", func(t *testing.T) {
-		os.Setenv("TEST_DURATION", "not_a_duration")
-		defer os.Unsetenv("TEST_DURATION")
+			val := getEnvDuration(tt.key, tt.defaultVal)
+			if val != tt.expect {
+				t.Fatalf("got %s, want %s", val, tt.expect)
+			}
+		})
+	}
 
-		val := getEnvDuration("TEST_DURATION", 10*time.Second)
-		if val != 10*time.Second {
-			t.Errorf("expected 10s (default), got %v", val)
-		}
-	})
-
-	t.Run("non-existing env", func(t *testing.T) {
-		os.Unsetenv("NON_EXISTENT_DURATION")
-
-		val := getEnvDuration("NON_EXISTENT_DURATION", 1*time.Hour)
-		if val != 1*time.Hour {
-			t.Errorf("expected 1h (default), got %v", val)
-		}
-	})
-
-	t.Run("empty env", func(t *testing.T) {
-		os.Setenv("EMPTY_DURATION", "")
-		defer os.Unsetenv("EMPTY_DURATION")
-
-		val := getEnvDuration("EMPTY_DURATION", 30*time.Second)
-		if val != 30*time.Second {
-			t.Errorf("expected 30s (default), got %v", val)
-		}
-	})
 }
 
 func TestGetEnvBool(t *testing.T) {
-	t.Run("true value", func(t *testing.T) {
-		os.Setenv("TEST_BOOL", "true")
-		defer os.Unsetenv("TEST_BOOL")
+	tests := []struct {
+		name       string
+		key        string
+		value      string
+		expect     bool
+		defaultVal bool
+		keyExists  bool
+	}{
+		{
+			name:       "true value",
+			key:        "TEST_BOOL",
+			value:      "true",
+			expect:     true,
+			defaultVal: false,
+			keyExists:  true,
+		},
+		{
+			name:       "false value",
+			key:        "TEST_BOOL",
+			value:      "false",
+			expect:     false,
+			defaultVal: true,
+			keyExists:  true,
+		},
+		{
+			name:       "invalid bool",
+			key:        "INVALID_BOOL",
+			value:      "not_a_bool",
+			expect:     true,
+			defaultVal: true,
+			keyExists:  true,
+		},
+		{
+			name:       "non-existing env",
+			key:        "NON_EXISTING_BOOL",
+			expect:     false,
+			defaultVal: false,
+			keyExists:  false,
+		},
+		{
+			name:       "empty env",
+			key:        "EMPTY_BOOL",
+			value:      "",
+			expect:     true,
+			defaultVal: true,
+			keyExists:  true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_ = os.Unsetenv(tt.key)
+			if tt.keyExists {
+				_ = os.Setenv(tt.key, tt.value)
+			}
+			t.Cleanup(func() { _ = os.Unsetenv(tt.key) })
 
-		val := getEnvBool("TEST_BOOL", false)
-		if !val {
-			t.Error("expected true, got false")
-		}
-	})
-
-	t.Run("false value", func(t *testing.T) {
-		os.Setenv("TEST_BOOL", "false")
-		defer os.Unsetenv("TEST_BOOL")
-
-		val := getEnvBool("TEST_BOOL", true)
-		if val {
-			t.Error("expected false, got true")
-		}
-	})
-
-	t.Run("invalid bool", func(t *testing.T) {
-		os.Setenv("TEST_BOOL", "not_a_bool")
-		defer os.Unsetenv("TEST_BOOL")
-
-		val := getEnvBool("TEST_BOOL", true)
-		if !val {
-			t.Error("expected true (default), got false")
-		}
-	})
-
-	t.Run("non-existing env", func(t *testing.T) {
-		os.Unsetenv("NON_EXISTENT_BOOL")
-
-		val := getEnvBool("NON_EXISTENT_BOOL", false)
-		if val {
-			t.Error("expected false (default), got true")
-		}
-	})
-
-	t.Run("empty env", func(t *testing.T) {
-		os.Setenv("EMPTY_BOOL", "")
-		defer os.Unsetenv("EMPTY_BOOL")
-
-		val := getEnvBool("EMPTY_BOOL", true)
-		if !val {
-			t.Error("expected true (default), got false")
-		}
-	})
+			val := getEnvBool(tt.key, tt.defaultVal)
+			if val != tt.expect {
+				t.Fatalf("got %t, want %t", val, tt.expect)
+			}
+		})
+	}
 }
 
 func TestConfig_ServerAddr(t *testing.T) {
@@ -206,7 +276,7 @@ func TestConfig_ServerAddr(t *testing.T) {
 
 			addr := cfg.ServerAddr()
 			if addr != tt.expected {
-				t.Errorf("expected '%s', got '%s'", tt.expected, addr)
+				t.Fatalf("expected '%s', got '%s'", tt.expected, addr)
 			}
 		})
 	}
