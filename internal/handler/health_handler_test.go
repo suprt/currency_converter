@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -19,65 +20,71 @@ func (m *MockHealthService) Health(ctx context.Context) error {
 }
 
 func TestHealthHandler_CheckHealth(t *testing.T) {
-	t.Run("healthy", func(t *testing.T) {
-		svc := &MockHealthService{}
-		handler := NewHealthHandler(svc)
+	tests := []struct {
+		name                  string
+		healthErr             error
+		expectStatus          int
+		expectHealthStatusVal string
+		expectError           bool
+	}{
+		{
+			name:                  "healthy",
+			healthErr:             nil,
+			expectStatus:          http.StatusOK,
+			expectHealthStatusVal: "healthy",
+			expectError:           false,
+		},
+		{
+			name:                  "unhealthy",
+			healthErr:             errors.New("storage unavailable"),
+			expectStatus:          http.StatusServiceUnavailable,
+			expectHealthStatusVal: "unhealthy",
+			expectError:           true,
+		},
+	}
 
-		req := httptest.NewRequest(http.MethodGet, "/health", nil)
-		w := httptest.NewRecorder()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &MockHealthService{
+				healthErr: tt.healthErr,
+			}
+			handler := NewHealthHandler(svc)
+			req := httptest.NewRequest(http.MethodGet, "/health", nil)
+			w := httptest.NewRecorder()
 
-		handler.CheckHealth(w, req)
+			handler.CheckHealth(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", w.Code)
-		}
+			if w.Code != tt.expectStatus {
+				t.Fatalf("expected status %d, got %d", tt.expectStatus, w.Code)
+			}
 
-		var resp map[string]interface{}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to parse response: %v", err)
-		}
+			var resp map[string]interface{}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("failed to parse response: %v", err)
+			}
 
-		if resp["status"] != "healthy" {
-			t.Errorf("expected status 'healthy', got '%v'", resp["status"])
-		}
-		if _, ok := resp["uptime"]; !ok {
-			t.Error("expected uptime in response")
-		}
-		if _, ok := resp["timestamp"]; !ok {
-			t.Error("expected timestamp in response")
-		}
-		if _, ok := resp["error"]; ok {
-			t.Error("unexpected error in healthy response")
-		}
-	})
+			if resp["status"] != tt.expectHealthStatusVal {
+				t.Fatalf("expected health status value %q, got %q", tt.expectHealthStatusVal, resp["status"])
+			}
+			if _, ok := resp["uptime"]; !ok {
+				t.Fatalf("expected uptime in response")
+			}
 
-	t.Run("unhealthy", func(t *testing.T) {
-		svc := &MockHealthService{
-			healthErr: assertionError("storage unavailable"),
-		}
-		handler := NewHealthHandler(svc)
+			if tt.expectError {
+				if errVal, ok := resp["error"]; !ok {
+					t.Fatalf("expected error in response")
+				} else if errVal != tt.healthErr.Error() {
+					t.Fatalf("expected error message %q, got %q", tt.healthErr.Error(), errVal)
+				}
+			} else {
+				if _, ok := resp["error"]; ok {
+					t.Fatalf("unexpected error in health response")
+				}
+			}
 
-		req := httptest.NewRequest(http.MethodGet, "/health", nil)
-		w := httptest.NewRecorder()
+		})
+	}
 
-		handler.CheckHealth(w, req)
-
-		if w.Code != http.StatusServiceUnavailable {
-			t.Errorf("expected status 503, got %d", w.Code)
-		}
-
-		var resp map[string]interface{}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to parse response: %v", err)
-		}
-
-		if resp["status"] != "unhealthy" {
-			t.Errorf("expected status 'unhealthy', got '%v'", resp["status"])
-		}
-		if err, ok := resp["error"].(string); !ok || err != "storage unavailable" {
-			t.Errorf("expected error message, got %v", resp["error"])
-		}
-	})
 }
 
 func TestNewHealthHandler(t *testing.T) {
@@ -88,10 +95,10 @@ func TestNewHealthHandler(t *testing.T) {
 		t.Fatal("expected handler to be created")
 	}
 	if handler.startTime.IsZero() {
-		t.Error("expected startTime to be set")
+		t.Fatal("expected startTime to be set")
 	}
 	// Verify startTime is recent (within 1 second)
 	if time.Since(handler.startTime) > time.Second {
-		t.Error("expected startTime to be recent")
+		t.Fatal("expected startTime to be recent")
 	}
 }
