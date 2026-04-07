@@ -45,11 +45,11 @@ func TestGetEnv(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_ = os.Unsetenv(tt.key)
 			if tt.keyExists {
-				_ = os.Setenv(tt.key, tt.defaultVal)
+				_ = os.Setenv(tt.key, tt.value)
 			}
 			t.Cleanup(func() { _ = os.Unsetenv(tt.key) })
 
-			val := getEnv(tt.key, tt.expect)
+			val := getEnv(tt.key, tt.defaultVal)
 			if val != tt.expect {
 				t.Fatalf("got %s, want %s", val, tt.expect)
 			}
