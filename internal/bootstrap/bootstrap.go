@@ -47,10 +47,11 @@ func NewApp() (*App, error) {
 	updater.Start()
 
 	rateLim := middleware.NewTokenBucket(middleware.LimiterConfig{
-		RPS:   cfg.RPS,
-		Burst: cfg.Burst,
+		RPS:       cfg.RPS,
+		Burst:     cfg.Burst,
+		BucketTTL: cfg.BucketTTL,
 	})
-	rateLim.Start(cfg.RateLimiterCleanup)
+	rateLim.Start(cfg.RateLimiterCleanupCheck)
 
 	CacheHandler := handler.NewCacheHandler(svc)
 	ConverterHandler := handler.NewConverterHandler(svc)

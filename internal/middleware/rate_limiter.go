@@ -8,15 +8,17 @@ import (
 )
 
 type LimiterConfig struct {
-	RPS     int
-	Burst   int
-	KeyFunc func(r *http.Request) string
+	RPS       int
+	Burst     int
+	BucketTTL time.Duration
+	KeyFunc   func(r *http.Request) string
 }
 
 type TokenBucket struct {
-	rate    int
-	burst   int
-	keyFunc func(r *http.Request) string
+	rate      int
+	burst     int
+	bucketTTL time.Duration
+	keyFunc   func(r *http.Request) string
 
 	mu     sync.RWMutex
 	tokens map[string]*bucket
@@ -37,6 +39,9 @@ func NewTokenBucket(cfg LimiterConfig) *TokenBucket {
 	if cfg.Burst <= 0 {
 		cfg.Burst = cfg.RPS
 	}
+	if cfg.BucketTTL <= 0 {
+		cfg.BucketTTL = time.Minute * 10
+	}
 	if cfg.KeyFunc == nil {
 		cfg.KeyFunc = func(r *http.Request) string {
 			ip := r.Header.Get("X-Forwarded-For")
@@ -55,6 +60,7 @@ func NewTokenBucket(cfg LimiterConfig) *TokenBucket {
 	return &TokenBucket{
 		rate:      cfg.RPS,
 		burst:     cfg.Burst,
+		bucketTTL: cfg.BucketTTL,
 		keyFunc:   cfg.KeyFunc,
 		tokens:    make(map[string]*bucket),
 		stopClean: make(chan struct{}),
@@ -104,8 +110,8 @@ func (t *TokenBucket) Cleanup() {
 
 	for key, b := range t.tokens {
 		b.mu.Lock()
-		// Удаляем бакеты, которые не использовались больше 10 минут
-		if time.Since(b.lastUpdate) > 10*time.Minute {
+
+		if time.Since(b.lastUpdate) > t.bucketTTL {
 			delete(t.tokens, key)
 		}
 		b.mu.Unlock()
@@ -117,7 +123,7 @@ func (t *TokenBucket) Start(interval time.Duration) {
 	if interval <= 0 {
 		interval = 1 * time.Minute
 	}
-	
+
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()

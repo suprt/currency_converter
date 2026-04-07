@@ -27,9 +27,10 @@ type Config struct {
 	RedisUse      bool
 
 	//Rate limiter
-	RPS                int
-	Burst              int
-	RateLimiterCleanup time.Duration
+	RPS                     int
+	Burst                   int
+	BucketTTL               time.Duration
+	RateLimiterCleanupCheck time.Duration
 
 	//Updater
 	UpdateInterval time.Duration
@@ -71,9 +72,10 @@ func Load() *Config {
 		RedisDB:       getEnvInt("REDIS_DB", 0),
 		RedisUse:      getEnvBool("REDIS_USE", false),
 
-		RPS:                getEnvInt("RPS", 10),
-		Burst:              getEnvInt("BURST", 20),
-		RateLimiterCleanup: getEnvDuration("RATE_LIMITER_CLEANUP", 1*time.Minute),
+		RPS:                     getEnvInt("RPS", 10),
+		Burst:                   getEnvInt("BURST", 20),
+		BucketTTL:               getEnvDuration("BUCKET_TTL", 10*time.Minute),
+		RateLimiterCleanupCheck: getEnvDuration("RATE_LIMITER_CLEANUP_CHECK", 1*time.Minute),
 
 		UpdateInterval: getEnvDuration("UPDATE_INTERVAL", 1*time.Hour),
 
