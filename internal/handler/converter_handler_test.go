@@ -3,8 +3,11 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 )
 
@@ -52,177 +55,111 @@ func (m *MockConverterService) SetConvertError(err error) {
 }
 
 func TestConverterHandler_GetRates(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
-		svc := NewMockConverterService()
-		svc.SetRate("EUR", "GBP", 0.86)
-		handler := NewConverterHandler(svc)
+	tests := []struct {
+		name         string
+		from         string
+		to           string
+		setupRate    bool
+		rateVal      float64
+		svcErr       error
+		expectStatus int
+		expectRate   float64
+	}{
+		{"success", "EUR", "GBP", true, 0.86, nil, http.StatusOK, 0.86},
+		{"missing parameters", "", "", false, 0, nil, http.StatusBadRequest, 0},
+		{"service error", "EUR", "GBP", true, 0.86, errors.New("service error"),
+			http.StatusInternalServerError, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewMockConverterService()
+			if tt.setupRate {
+				svc.SetRate(tt.from, tt.to, tt.rateVal)
+			}
+			svc.getRatesErr = tt.svcErr
+			handler := NewConverterHandler(svc)
 
-		req := httptest.NewRequest(http.MethodGet, "/rates?from=EUR&to=GBP", nil)
-		w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/rates?from=%s&to=%s", tt.from, tt.to), nil)
+			w := httptest.NewRecorder()
 
-		handler.GetRates(w, req)
+			handler.GetRates(w, req)
 
-		if w.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", w.Code)
-		}
+			if tt.expectStatus != w.Code {
+				t.Fatalf("expected status %d, got %d", tt.expectStatus, w.Code)
+			}
 
-		var resp map[string]interface{}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to parse response: %v", err)
-		}
+			if tt.expectStatus == http.StatusOK {
+				var resp map[string]interface{}
+				if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+					t.Fatalf("failed to parse response: %v", err)
+				}
 
-		if resp["from"] != "EUR" || resp["to"] != "GBP" {
-			t.Error("unexpected from/to in response")
-		}
-		if rate, ok := resp["rate"].(float64); !ok || rate != 0.86 {
-			t.Errorf("expected rate 0.86, got %v", resp["rate"])
-		}
-	})
+				if resp["from"] != tt.from || resp["to"] != tt.to {
+					t.Fatalf("unexpected from/to in response")
+				}
+				if rate, ok := resp["rate"].(float64); !ok || rate != tt.expectRate {
+					t.Fatalf("expected rate %f, got %v", tt.expectRate, resp["rate"])
+				}
+			}
 
-	t.Run("missing parameters", func(t *testing.T) {
-		svc := NewMockConverterService()
-		handler := NewConverterHandler(svc)
-
-		req := httptest.NewRequest(http.MethodGet, "/rates", nil)
-		w := httptest.NewRecorder()
-
-		handler.GetRates(w, req)
-
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("expected status 400, got %d", w.Code)
-		}
-	})
-
-	t.Run("missing 'to' parameter", func(t *testing.T) {
-		svc := NewMockConverterService()
-		handler := NewConverterHandler(svc)
-
-		req := httptest.NewRequest(http.MethodGet, "/rates?from=EUR", nil)
-		w := httptest.NewRecorder()
-
-		handler.GetRates(w, req)
-
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("expected status 400, got %d", w.Code)
-		}
-	})
-
-	t.Run("service error", func(t *testing.T) {
-		svc := NewMockConverterService()
-		svc.SetGetRatesError(assertionError("service error"))
-		handler := NewConverterHandler(svc)
-
-		req := httptest.NewRequest(http.MethodGet, "/rates?from=EUR&to=GBP", nil)
-		w := httptest.NewRecorder()
-
-		handler.GetRates(w, req)
-
-		if w.Code != http.StatusInternalServerError {
-			t.Errorf("expected status 500, got %d", w.Code)
-		}
-	})
+		})
+	}
 }
 
 func TestConverterHandler_Convert(t *testing.T) {
-	t.Run("success", func(t *testing.T) {
-		svc := NewMockConverterService()
-		handler := NewConverterHandler(svc)
+	tests := []struct {
+		name         string
+		from         string
+		to           string
+		amount       string
+		svcErr       error
+		expectStatus int
+		expectResult float64
+	}{
+		{"success", "EUR", "GBP", "100", nil, http.StatusOK, 85},
+		{"missing parameters", "", "", "", nil, http.StatusBadRequest, 0},
+		{"invalid amount", "EUR", "GBP", "invalid", nil, http.StatusBadRequest, 0},
+		{"negative amount", "EUR", "GBP", "-100", nil, http.StatusBadRequest, 0},
+		{"zero amount", "EUR", "GBP", "0", nil, http.StatusBadRequest, 0},
+		{"service error", "EUR", "GBP", "100", errors.New("conversion error"),
+			http.StatusInternalServerError, 85},
+	}
 
-		req := httptest.NewRequest(http.MethodGet, "/convert?from=EUR&to=GBP&amount=100", nil)
-		w := httptest.NewRecorder()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewMockConverterService()
+			svc.convertErr = tt.svcErr
+			handler := NewConverterHandler(svc)
 
-		handler.Convert(w, req)
+			req := httptest.NewRequest(http.MethodGet, fmt.Sprintf("/convert?from=%s&to=%s&amount=%s", tt.from, tt.to, tt.amount), nil)
+			w := httptest.NewRecorder()
 
-		if w.Code != http.StatusOK {
-			t.Errorf("expected status 200, got %d", w.Code)
-		}
+			handler.Convert(w, req)
 
-		var resp map[string]interface{}
-		if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-			t.Fatalf("failed to parse response: %v", err)
-		}
-
-		if resp["from"] != "EUR" || resp["to"] != "GBP" {
-			t.Error("unexpected from/to in response")
-		}
-		if resp["amount"].(float64) != 100 {
-			t.Errorf("expected amount 100, got %v", resp["amount"])
-		}
-		if result, ok := resp["result"].(float64); !ok || result != 85 {
-			t.Errorf("expected result 85, got %v", resp["result"])
-		}
-	})
-
-	t.Run("missing parameters", func(t *testing.T) {
-		svc := NewMockConverterService()
-		handler := NewConverterHandler(svc)
-
-		req := httptest.NewRequest(http.MethodGet, "/convert", nil)
-		w := httptest.NewRecorder()
-
-		handler.Convert(w, req)
-
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("expected status 400, got %d", w.Code)
-		}
-	})
-
-	t.Run("invalid amount", func(t *testing.T) {
-		svc := NewMockConverterService()
-		handler := NewConverterHandler(svc)
-
-		req := httptest.NewRequest(http.MethodGet, "/convert?from=EUR&to=GBP&amount=invalid", nil)
-		w := httptest.NewRecorder()
-
-		handler.Convert(w, req)
-
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("expected status 400, got %d", w.Code)
-		}
-	})
-
-	t.Run("negative amount", func(t *testing.T) {
-		svc := NewMockConverterService()
-		handler := NewConverterHandler(svc)
-
-		req := httptest.NewRequest(http.MethodGet, "/convert?from=EUR&to=GBP&amount=-100", nil)
-		w := httptest.NewRecorder()
-
-		handler.Convert(w, req)
-
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("expected status 400, got %d", w.Code)
-		}
-	})
-
-	t.Run("zero amount", func(t *testing.T) {
-		svc := NewMockConverterService()
-		handler := NewConverterHandler(svc)
-
-		req := httptest.NewRequest(http.MethodGet, "/convert?from=EUR&to=GBP&amount=0", nil)
-		w := httptest.NewRecorder()
-
-		handler.Convert(w, req)
-
-		if w.Code != http.StatusBadRequest {
-			t.Errorf("expected status 400, got %d", w.Code)
-		}
-	})
-
-	t.Run("service error", func(t *testing.T) {
-		svc := NewMockConverterService()
-		svc.SetConvertError(assertionError("conversion error"))
-		handler := NewConverterHandler(svc)
-
-		req := httptest.NewRequest(http.MethodGet, "/convert?from=EUR&to=GBP&amount=100", nil)
-		w := httptest.NewRecorder()
-
-		handler.Convert(w, req)
-
-		if w.Code != http.StatusInternalServerError {
-			t.Errorf("expected status 500, got %d", w.Code)
-		}
-	})
+			if tt.expectStatus != w.Code {
+				t.Fatalf("expected status %d, got %d", tt.expectStatus, w.Code)
+			}
+			if tt.expectStatus == http.StatusOK {
+				var resp map[string]interface{}
+				if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+					t.Fatalf("failed to parse response: %v", err)
+				}
+				if resp["from"] != tt.from || resp["to"] != tt.to {
+					t.Fatalf("unexpected from/to in response")
+				}
+				s, err := strconv.ParseFloat(tt.amount, 64)
+				if err != nil {
+					t.Fatalf("failed to parse amount: %v", err)
+				}
+				if resp["amount"].(float64) != s {
+					t.Fatalf("unexpected amount %f, got %f", s, resp["amount"].(float64))
+				}
+				if result, ok := resp["result"].(float64); !ok || result != tt.expectResult {
+					t.Fatalf("expected result %f, got %f", result, resp["result"])
+				}
+			}
+		})
+	}
 }
 
 func TestConverterHandler_GetRates_InvalidCurrency(t *testing.T) {
