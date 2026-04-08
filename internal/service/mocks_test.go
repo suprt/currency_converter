@@ -117,9 +117,9 @@ func (m *MockRepo) SetSetError(err error) {
 
 // MockConverterClient - mock implementation of ConverterClient interface
 type MockConverterClient struct {
-	rates           map[string]float64
-	currencies      []byte
-	getRatesError   error
+	rates            map[string]float64
+	currencies       []byte
+	getRatesError    error
 	getCurrenciesErr error
 }
 

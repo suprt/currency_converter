@@ -31,8 +31,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	_ "github.com/suprt/currency_converter/internal/handler/docs"
 	"github.com/suprt/currency_converter/internal/bootstrap"
+	_ "github.com/suprt/currency_converter/internal/handler/docs"
 	"github.com/suprt/currency_converter/internal/logger"
 )
 
