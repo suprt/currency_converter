@@ -1,6 +1,25 @@
+![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8?logo=go)
+![License](https://img.shields.io/badge/License-MIT-green)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/suprt/currency_converter/test.yml?label=CI&logo=github)
+[![Go Report Card](https://goreportcard.com/badge/github.com/suprt/currency_converter)](https://goreportcard.com/report/github.com/suprt/currency_converter)
+
 # Currency Converter API
 
-REST API для конвертации валют с поддержкой кэширования (Redis или in-memory).
+REST API для конвертации валют с поддержкой кэширования (Redis или in-memory) и механизмами отказоустойчивости.
+
+## Возможности
+
+- Конвертация валют и получение курсов в реальном времени
+- Гибкое кэширование: Redis или in-memory с автоматической очисткой
+- Retry с exponential backoff при сбоях внешнего API
+- Circuit Breaker для защиты от каскадных отказов
+- Rate Limiting по алгоритму Token Bucket с лимитированием по IP
+- Валидация параметров запросов (коды валют, суммы)
+- Admin API для управления кэшем
+- Swagger документация
+- Docker контейнеризация
+- Unit и интеграционные тесты (Testcontainers)
+- CI/CD через GitHub Actions
 
 ## 🚀 Быстрый старт
 
@@ -140,15 +159,48 @@ curl http://localhost:8080/health
 | `API_URL` | URL внешнего API | `https://currencyapi.net/api/v2/` |
 | `SERVER_HOST` | Хост сервера | `localhost` |
 | `SERVER_PORT` | Порт сервера | `8080` |
+| `SERVER_TIMEOUT` | Таймаут сервера | `45s` |
+| `CONVERTER_TIMEOUT` | Таймаут HTTP клиента | `10s` |
 | `REDIS_USE` | Использовать Redis | `false` |
 | `REDIS_ADDR` | Адрес Redis | `localhost:6379` |
 | `RPS` | Запросов в секунду (rate limiter) | `10` |
 | `BURST` | Burst лимит | `20` |
+| `CIRCUIT_BREAKER_THRESHOLD` | Порог срабатывания Circuit Breaker | `5` |
+| `CIRCUIT_BREAKER_TIMEOUT` | Время восстановления Circuit Breaker | `30s` |
 | `LOG_LEVEL` | Уровень логирования | `info` |
 
 Полный список в `.env.example`.
 
-## 🧪 Тесты
+## 🛡️ Надёжность
+
+### Retry логика
+
+При сбоях внешнего API клиент автоматически повторяет запросы с **exponential backoff**:
+- Максимум **3 попытки**
+- Начальная задержка: **1 секунда**
+- Множитель: **2x** (1s → 2s → 4s)
+- Повторяются только при **сетевых ошибках** и **5xx ответах**
+- **4xx ошибки** не повторяются (клиентская ошибка)
+
+### Circuit Breaker
+
+Защищает систему от **каскадных отказов** при длительных сбоях внешнего API:
+- **CLOSED** — нормальная работа
+- **OPEN** — блокировка запросов после N ошибок (даёт API время на восстановление)
+- **HALF-OPEN** — пробный запрос для проверки восстановления
+
+### Graceful Shutdown
+
+При получении сигнала SIGTERM/SIGINT:
+1. Сервер перестаёт принимать новые запросы
+2. Текущие запросы обрабатываются (до 20s)
+3. Останавливается фоновый обновитель курсов
+4. Останавливается rate limiter
+5. Закрывается соединение с Redis
+
+## 🧪 Тестирование
+
+### Unit-тесты
 
 ```bash
 # Запустить все тесты
@@ -172,6 +224,21 @@ go test ./internal/handler/... -v
 make test
 make test-cover
 ```
+
+### Интеграционные тесты
+
+Интеграционные тесты используют **Testcontainers** для поднятия реального Redis контейнера:
+
+```bash
+# Запустить интеграционные тесты (требуется Docker)
+go test -tags=integration -v ./internal/repository/
+```
+
+**Что тестируется:**
+- CRUD операции с Redis
+- TTL и автоматическое удаление просроченных ключей
+- Очистка кэша
+- Корректная обработка ошибок
 
 ## 🐳 Docker
 
@@ -200,7 +267,7 @@ docker-compose up -d --build
 
 ```bash
 # API
-API_KEY=your-api-key
+API_KEY=your-api-key-here
 ADMIN_API_KEY=admin-secret-key-123
 
 # Redis
@@ -214,6 +281,17 @@ BURST=20
 LOG_LEVEL=info
 ```
 
+## 🔧 CI/CD
+
+Проект использует **GitHub Actions** для автоматической проверки качества кода:
+
+| Job | Что делает |
+|-----|------------|
+| **Test** | Установка Go → Download deps → Генерация Swagger → Сборка → Vet → Тесты (-race) → Интеграционные тесты |
+| **Lint** | Установка Go → Генерация Swagger → golangci-lint |
+
+Конфигурация: [`.github/workflows/test.yml`](.github/workflows/test.yml)
+
 ## 🏗️ Архитектура
 
 ```
@@ -221,13 +299,28 @@ cmd/
 └── api/              # Точка входа
 internal/
 ├── bootstrap/        # Инициализация приложения
-├── client/           # HTTP клиент для внешнего API
-├── config/           # Конфигурация
-├── handler/          # HTTP хендлеры
+├── client/           # HTTP клиент для внешнего API (retry, circuit breaker)
+├── config/           # Конфигурация через env
+├── handler/          # HTTP хендлеры + валидация ввода
 │   └── docs/         # Swagger документация
 ├── logger/           # Логгер (slog)
 ├── middleware/       # Middleware (rate limiter, auth)
 ├── repository/       # Репозитории (Redis, in-memory)
-├── routes/           # Роутинг
+├── routes/           # Роутинг (chi)
 └── service/          # Бизнес-логика
 ```
+
+## 📦 Стек технологий
+
+- **Go 1.25** — основной язык
+- **chi/v5** — HTTP роутер
+- **go-redis/v9** — Redis клиент
+- **testcontainers-go** — Интеграционное тестирование
+- **swaggo/swag** — Swagger документация
+- **godotenv** — Загрузка переменных окружения
+- **slog** — Структурированное логирование (стандартная библиотека)
+
+## 📜 Лицензия
+
+Этот проект распространяется под лицензией **MIT**.
+См. файл [LICENSE](LICENSE) для подробностей.
